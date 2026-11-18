@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa";
 import ProductCard from "./ProductCard";
 import type { Product } from "@/lib/data";
@@ -32,12 +32,23 @@ export default function ProductCarousel({
   const [pos, setPos] = useState(count);
   const [animate, setAnimate] = useState(true);
 
-  const move = (dir: number) => {
+  const [paused, setPaused] = useState(false);
+  // Bumped on manual navigation so the autoplay timer restarts from zero.
+  const [tick, setTick] = useState(0);
+
+  const move = useCallback((dir: number) => {
     setAnimate(true);
     setPos((p) => p + dir);
+  }, []);
+
+  const go = (dir: number) => {
+    move(dir);
+    setTick((t) => t + 1);
   };
 
-  const onTransitionEnd = () => {
+  const onTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    // Ignore transitions bubbling up from the cards (hover effects).
+    if (e.target !== e.currentTarget) return;
     if (pos >= count * 2 || pos < count) {
       setAnimate(false);
       setPos(((pos - count) % count + count) % count + count);
@@ -55,6 +66,17 @@ export default function ProductCarousel({
   // Same card width as the grids (4 per row). With too few products to scroll,
   // show them once, without arrows and without looping duplicates.
   const scrollable = count > perView;
+
+  // Autoplay: one step every 4s, paused on hover/focus, in hidden tabs
+  // (transitionend does not fire there) and for reduced-motion users.
+  useEffect(() => {
+    if (!scrollable || paused) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const id = window.setInterval(() => {
+      if (!document.hidden) move(1);
+    }, 4000);
+    return () => window.clearInterval(id);
+  }, [scrollable, paused, tick, move]);
   const items = scrollable ? track : products;
 
   return (
@@ -65,17 +87,13 @@ export default function ProductCarousel({
             <span>{title}</span>
           </h1>
         </div>
-        <div className="product-carousel">
-          {scrollable && (
-            <div className="owl-nav">
-              <button className="owl-prev" aria-label="წინა" onClick={() => move(-1)}>
-                <FaAngleLeft />
-              </button>
-              <button className="owl-next" aria-label="შემდეგი" onClick={() => move(1)}>
-                <FaAngleRight />
-              </button>
-            </div>
-          )}
+        <div
+          className="product-carousel"
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+          onFocus={() => setPaused(true)}
+          onBlur={() => setPaused(false)}
+        >
           <div className="owl-stage-outer">
             <div
               className="owl-stage"
@@ -92,6 +110,16 @@ export default function ProductCarousel({
               ))}
             </div>
           </div>
+          {scrollable && (
+            <div className="owl-nav">
+              <button className="owl-prev" aria-label="წინა" onClick={() => go(-1)}>
+                <FaAngleLeft />
+              </button>
+              <button className="owl-next" aria-label="შემდეგი" onClick={() => go(1)}>
+                <FaAngleRight />
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </section>

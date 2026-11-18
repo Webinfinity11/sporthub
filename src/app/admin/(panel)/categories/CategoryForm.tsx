@@ -14,7 +14,6 @@ type CategoryData = {
   slug: string;
   parentId: number | null;
   image: string | null;
-  sortOrder: number;
   active: boolean;
 };
 
@@ -111,12 +110,7 @@ export default function CategoryForm({
           </div>
         )}
 
-        <div className="adm-field-row">
-          <div className="adm-field">
-            <label htmlFor="c-order">რიგი</label>
-            <input id="c-order" name="sortOrder" type="number" defaultValue={category.sortOrder} />
-          </div>
-          <label className="adm-toggle-row compact">
+        <label className="adm-toggle-row compact">
             <span>
               <strong>აქტიური</strong>
             </span>
@@ -125,7 +119,6 @@ export default function CategoryForm({
               <span className="track" aria-hidden />
             </span>
           </label>
-        </div>
 
         <div className="adm-form-foot">
           {category.id ? (

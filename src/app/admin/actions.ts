@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
@@ -129,7 +129,9 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
   if (id) {
     await db.update(products).set(values).where(eq(products.id, id));
   } else {
-    const [row] = await db.insert(products).values(values).returning({ id: products.id });
+    // New products go to the top of the list (and of the catalog).
+    const [{ min }] = await db.select({ min: sql<number>`coalesce(min(${products.sortOrder}), 1)` }).from(products);
+    const [row] = await db.insert(products).values({ ...values, sortOrder: Number(min) - 1 }).returning({ id: products.id });
     savedId = row.id;
   }
   updateTag(TAGS.catalog);
@@ -151,6 +153,27 @@ export async function setProductActive(id: number, active: boolean) {
 }
 
 // 
+
+/**
+ * Saves a drag-and-drop order. `ids` may be a filtered subset of the products:
+ * they are written back into the slots they already occupy, so products that
+ * were not shown keep their places.
+ */
+export async function reorderProducts(ids: number[]) {
+  await requireAdmin();
+  const wanted = ids.map(Number).filter(Number.isInteger);
+  const all = await db.select({ id: products.id }).from(products).orderBy(asc(products.sortOrder), asc(products.id));
+  const set = new Set(wanted);
+  if (set.size !== wanted.length || wanted.some((id) => !all.some((p) => p.id === id))) return;
+  let k = 0;
+  const order = all.map((p) => (set.has(p.id) ? wanted[k++] : p.id));
+  await db.transaction(async (tx) => {
+    for (const [i, id] of order.entries()) {
+      await tx.update(products).set({ sortOrder: i }).where(eq(products.id, id));
+    }
+  });
+  updateTag(TAGS.catalog);
+}
 
 export async function saveCategory(_prev: FormState, form: FormData): Promise<FormState> {
   await requireAdmin();
@@ -176,13 +199,49 @@ export async function saveCategory(_prev: FormState, form: FormData): Promise<Fo
     slug: await uniqueSlug(categories, str(form, "slug") || name, id ?? undefined),
     parentId: parentId || null,
     image: str(form, "image") || null,
-    sortOrder: num(form, "sortOrder") ?? 0,
     active: form.get("active") === "on",
   };
-  if (id) await db.update(categories).set(values).where(eq(categories.id, id));
-  else await db.insert(categories).values(values);
+  // Order is set by drag and drop. A new category, or one moved to another
+  // parent, goes to the end of its group.
+  const lastInGroup = async () => {
+    const [{ max }] = await db
+      .select({ max: sql<number>`coalesce(max(${categories.sortOrder}), -1)` })
+      .from(categories)
+      .where(values.parentId ? eq(categories.parentId, values.parentId) : isNull(categories.parentId));
+    return Number(max) + 1;
+  };
+  if (id) {
+    const [old] = await db.select({ parentId: categories.parentId }).from(categories).where(eq(categories.id, id)).limit(1);
+    const moved = (old?.parentId ?? null) !== values.parentId;
+    await db
+      .update(categories)
+      .set(moved ? { ...values, sortOrder: await lastInGroup() } : values)
+      .where(eq(categories.id, id));
+  } else {
+    await db.insert(categories).values({ ...values, sortOrder: await lastInGroup() });
+  }
   updateTag(TAGS.catalog);
   redirect("/admin/categories?saved=1");
+}
+
+/** Saves a drag-and-drop order of one group: main categories, or one parent's subcategories. */
+export async function reorderCategories(parentId: number | null, ids: number[]) {
+  await requireAdmin();
+  const siblings = await db
+    .select({ id: categories.id })
+    .from(categories)
+    .where(parentId ? eq(categories.parentId, parentId) : isNull(categories.parentId));
+  const wanted = ids.map(Number);
+  const known = new Set(siblings.map((c) => c.id));
+  if (wanted.length !== known.size || new Set(wanted).size !== wanted.length || wanted.some((id) => !known.has(id))) {
+    throw new Error("Category list is out of date");
+  }
+  await db.transaction(async (tx) => {
+    for (const [i, id] of wanted.entries()) {
+      await tx.update(categories).set({ sortOrder: i }).where(eq(categories.id, id));
+    }
+  });
+  updateTag(TAGS.catalog);
 }
 
 export async function deleteCategory(id: number) {

@@ -1,12 +1,11 @@
-/* eslint-disable @next/next/no-img-element */
-import { asc, desc } from "drizzle-orm";
+import { asc } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { FaSearch } from "react-icons/fa";
 import { categories, db, products } from "@/db";
 import { requireAdmin } from "@/lib/auth";
-import { discountPercent, formatPrice } from "@/lib/data";
-import ProductActiveSwitch from "./ProductActiveSwitch";
+import { discountPercent } from "@/lib/data";
+import ProductTable from "./ProductTable";
 
 export const instant = false;
 
@@ -20,7 +19,7 @@ export default async function ProductsPage({ searchParams }: PageProps<"/admin/p
   const show = sp.show === "hidden" ? "hidden" : sp.show === "sale" ? "sale" : "all";
 
   const [rows, cats] = await Promise.all([
-    db.select().from(products).orderBy(desc(products.updatedAt)),
+    db.select().from(products).orderBy(asc(products.sortOrder), asc(products.id)),
     db.select().from(categories).orderBy(asc(categories.sortOrder), asc(categories.id)),
   ]);
   const catName = (id: number | null) => cats.find((c) => c.id === id)?.name ?? "უკატეგორიო";
@@ -85,50 +84,19 @@ export default async function ProductsPage({ searchParams }: PageProps<"/admin/p
         {list.length === 0 ? (
           <p className="adm-empty">პროდუქტი ვერ მოიძებნა.</p>
         ) : (
-          <table className="adm-table products">
-            <thead>
-              <tr>
-                <th colSpan={2}>პროდუქტი</th>
-                <th>კატეგორია</th>
-                <th className="num">ფასი</th>
-                <th className="num">მარაგი</th>
-                <th>საიტზე</th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.map((p) => {
-                const d = discountPercent(p);
-                return (
-                  <tr key={p.id} className={p.active ? undefined : "is-muted"}>
-                    <td className="thumb">
-                      <img src={p.images[0] ?? "/img/categories/cat-weights.webp"} alt="" />
-                    </td>
-                    <td>
-                      <Link href={`/admin/products/${p.id}`} className="adm-strong-link">
-                        {p.name}
-                      </Link>
-                      <span className="adm-cell-sub">/{p.slug}</span>
-                    </td>
-                    <td className="adm-muted">{catName(p.categoryId)}</td>
-                    <td className="num">
-                      <span className="adm-cell-main">{formatPrice(p.price)}</span>
-                      {d > 0 && (
-                        <span className="adm-cell-sub">
-                          <del>{formatPrice(p.oldPrice!)}</del> <span className="adm-off">-{d}%</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="num">
-                      <span className={`adm-stock${p.stock === 0 ? " zero" : p.stock <= 3 ? " low" : ""}`}>{p.stock}</span>
-                    </td>
-                    <td>
-                      <ProductActiveSwitch id={p.id} active={p.active} name={p.name} />
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <ProductTable
+            rows={list.map((p) => ({
+              id: p.id,
+              name: p.name,
+              slug: p.slug,
+              image: p.images[0] ?? null,
+              categoryName: catName(p.categoryId),
+              price: p.price,
+              oldPrice: p.oldPrice,
+              stock: p.stock,
+              active: p.active,
+            }))}
+          />
         )}
       </section>
     </>

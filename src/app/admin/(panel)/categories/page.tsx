@@ -1,11 +1,10 @@
-/* eslint-disable @next/next/no-img-element */
 import { asc, count } from "drizzle-orm";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { FaPen, FaPlus } from "react-icons/fa";
 import { categories, db, products } from "@/db";
 import { requireAdmin } from "@/lib/auth";
 import CategoryForm from "./CategoryForm";
+import CategoryList, { type CategoryItem } from "./CategoryList";
 
 export const instant = false;
 
@@ -24,29 +23,17 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
   const editing = typeof editId === "number" ? cats.find((c) => c.id === editId) : undefined;
   const newParent = Number(sp.parent) || null;
 
-  const row = (c: (typeof cats)[number], sub = false) => (
-    <li key={c.id} className={`adm-cat${sub ? " sub" : ""}${c.active ? "" : " is-muted"}${editId === c.id ? " editing" : ""}`}>
-      <span className="adm-cat-img">{c.image ? <img src={c.image} alt="" /> : null}</span>
-      <span className="adm-cat-name">
-        <strong>{c.name}</strong>
-        <span className="adm-cell-sub">
-          /{c.slug}
-          {!c.active && " · დამალული"}
-        </span>
-      </span>
-      <span className="adm-cat-count">{n(c.id) + (sub ? 0 : cats.filter((s) => s.parentId === c.id).reduce((a, s) => a + n(s.id), 0))} პროდ.</span>
-      <span className="adm-cat-actions">
-        {!sub && (
-          <Link href={`/admin/categories?edit=new&parent=${c.id}`} className="adm-icon-btn" aria-label={`${c.name}: ქვეკატეგორიის დამატება`} title="ქვეკატეგორია">
-            <FaPlus />
-          </Link>
-        )}
-        <Link href={`/admin/categories?edit=${c.id}`} className="adm-icon-btn" aria-label={`${c.name}: რედაქტირება`} title="რედაქტირება">
-          <FaPen />
-        </Link>
-      </span>
-    </li>
-  );
+  const total = (id: number) => n(id) + cats.filter((s) => s.parentId === id).reduce((a, s) => a + n(s.id), 0);
+  const item = (c: (typeof cats)[number], children: CategoryItem[] = []): CategoryItem => ({
+    id: c.id,
+    name: c.name,
+    slug: c.slug,
+    image: c.image,
+    active: c.active,
+    count: children.length ? total(c.id) : n(c.id),
+    children,
+  });
+  const tree = top.map((c) => item(c, cats.filter((s) => s.parentId === c.id).map((s) => item(s))));
 
   return (
     <>
@@ -54,7 +41,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
         <div>
           <h1>კატეგორიები</h1>
           <p className="adm-muted">
-            {top.length} კატეგორია, {cats.length - top.length} ქვეკატეგორია. მთავარ გვერდზე პირველი 4 ჩანს.
+            {top.length} კატეგორია, {cats.length - top.length} ქვეკატეგორია. მთავარ გვერდზე პირველი 4 ჩანს. რიგის შესაცვლელად გადაათრიეთ.
           </p>
         </div>
         <Link href="/admin/categories?edit=new" className="adm-btn primary">
@@ -67,9 +54,7 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
           {top.length === 0 ? (
             <p className="adm-empty">კატეგორიები ჯერ არ არის.</p>
           ) : (
-            <ul className="adm-cat-list">
-              {top.map((c) => [row(c), ...cats.filter((s) => s.parentId === c.id).map((s) => row(s, true))])}
-            </ul>
+            <CategoryList tree={tree} editId={editId} />
           )}
         </section>
 
@@ -87,10 +72,9 @@ export default async function CategoriesPage({ searchParams }: PageProps<"/admin
                     slug: editing.slug,
                     parentId: editing.parentId,
                     image: editing.image,
-                    sortOrder: editing.sortOrder,
                     active: editing.active,
                   }
-                : { name: "", slug: "", parentId: newParent, image: null, sortOrder: top.length, active: true }
+                : { name: "", slug: "", parentId: newParent, image: null, active: true }
             }
           />
         )}
