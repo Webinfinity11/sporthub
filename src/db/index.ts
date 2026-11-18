@@ -4,7 +4,8 @@ import { Pool } from "pg";
 import * as schema from "./schema";
 
 const url = process.env.DATABASE_URL;
-if (!url) throw new Error("DATABASE_URL is not set");
+// `next build` may load this module without a database; fail only when the server actually runs.
+if (!url && process.env.NEXT_PHASE !== "phase-production-build") throw new Error("DATABASE_URL is not set");
 
 // Reuse one pool across hot reloads in development.
 const g = globalThis as unknown as { __pgPool?: Pool };
@@ -13,7 +14,7 @@ const pool =
   new Pool({
     connectionString: url,
     max: Number(process.env.DATABASE_POOL_MAX ?? 10),
-    ssl: /sslmode=require/.test(url) ? { rejectUnauthorized: false } : undefined,
+    ssl: /sslmode=require/.test(url ?? "") ? { rejectUnauthorized: false } : undefined,
   });
 if (process.env.NODE_ENV !== "production") g.__pgPool = pool;
 
