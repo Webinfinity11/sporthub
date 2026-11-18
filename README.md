@@ -1,36 +1,53 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# SportHub
 
-## Getting Started
+Georgian sports-equipment shop: storefront + admin panel.
+Next.js 16 (App Router), PostgreSQL via Drizzle ORM, plain CSS.
 
-First, run the development server:
+## Local development
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run db:dev        # terminal 1: local Postgres (PGlite) on 127.0.0.1:5433, data in ./.devdb
+npm run db:migrate    # first time / after schema changes
+npm run db:seed       # first time: test categories, products, hero slides
+npm run dev           # terminal 2: http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Settings live in `.env.local` (not committed):
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Variable | Meaning |
+|---|---|
+| `DATABASE_URL` | Postgres connection string |
+| `ADMIN_USERNAME` | login for `/admin` (default `admin`) |
+| `ADMIN_PASSWORD` | password for `/admin` |
+| `SESSION_SECRET` | random string (32+ chars) that signs the admin session cookie |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Admin panel: `/admin`.
 
-## Learn More
+## Database changes
 
-To learn more about Next.js, take a look at the following resources:
+Edit `src/db/schema.ts`, then:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npm run db:generate   # writes a new SQL migration into ./drizzle
+npm run db:migrate
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Migrations also run automatically on every `npm start` (Railway).
 
-## Deploy on Vercel
+## Deploy on Railway
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+1. Push the repo to GitHub and create a Railway project from it.
+2. Add a **PostgreSQL** service to the project.
+3. In the app service, set variables:
+   - `DATABASE_URL` = `${{Postgres.DATABASE_URL}}` (reference to the Postgres service)
+   - `ADMIN_USERNAME` = admin login
+   - `ADMIN_PASSWORD` = a strong password
+   - `SESSION_SECRET` = a long random string (e.g. `openssl rand -hex 32`)
+4. Deploy. Build: `npm run build`, start: `npm start` (applies migrations, then starts Next).
+5. Fill the shop from `/admin`, or seed test content once with
+   `DATABASE_URL=<public url> npx tsx scripts/seed.ts` from your machine.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The build does not need the database; storefront pages read it per request (cached, refreshed when the admin saves).
+
+Uploaded images are stored in Postgres and served from `/media/<id>`.

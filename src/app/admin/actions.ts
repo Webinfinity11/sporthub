@@ -1,0 +1,376 @@
+"use server";
+
+import { and, eq, ne, sql } from "drizzle-orm";
+import { updateTag } from "next/cache";
+import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { categories, db, heroSlides, media, orders, products, promoCodes, siteSettings, type OrderStatus } from "@/db";
+import { checkCredentials, createSessionToken, requireAdmin, SESSION_COOKIE } from "@/lib/auth";
+import { normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
+import { TAGS } from "@/lib/queries";
+import { slugify } from "@/lib/slug";
+
+export type FormState = { ok?: boolean; error?: string; fields?: Record<string, string> } | null;
+
+const str = (f: FormData, k: string) => String(f.get(k) ?? "").trim();
+const num = (f: FormData, k: string) => {
+  const v = str(f, k).replace(",", ".");
+  return v === "" ? null : Number(v);
+};
+
+// 
+
+const attempts = new Map<string, { n: number; until: number }>();
+
+export async function login(_prev: FormState, form: FormData): Promise<FormState> {
+  const ip = (await headers()).get("x-forwarded-for")?.split(",")[0]?.trim() || "local";
+  const a = attempts.get(ip);
+  if (a && a.n >= 5 && a.until > Date.now()) {
+    return { error: "ძალიან ბევრი მცდელობა. სცადეთ 15 წუთში." };
+  }
+  if (!checkCredentials(str(form, "username"), String(form.get("password") ?? ""))) {
+    const n = a && a.until > Date.now() ? a.n + 1 : 1;
+    attempts.set(ip, { n, until: Date.now() + 15 * 60 * 1000 });
+    return { error: "მომხმარებელი ან პაროლი არასწორია" };
+  }
+  attempts.delete(ip);
+  const { token, expires } = createSessionToken();
+  (await cookies()).set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    expires,
+  });
+  redirect("/admin");
+}
+
+export async function logout() {
+  (await cookies()).delete(SESSION_COOKIE);
+  redirect("/admin/login");
+}
+
+// 
+
+const IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"];
+const MAX_IMAGE = 8 * 1024 * 1024;
+
+export async function uploadImage(form: FormData): Promise<{ url?: string; error?: string }> {
+  await requireAdmin();
+  const file = form.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "ფაილი ვერ მოიძებნა" };
+  if (!IMAGE_TYPES.includes(file.type)) return { error: "დაშვებულია JPG, PNG, WEBP, AVIF ან GIF" };
+  if (file.size > MAX_IMAGE) return { error: "ფაილი 8 MB-ზე დიდია" };
+  const data = Buffer.from(await file.arrayBuffer());
+  const [row] = await db.insert(media).values({ mime: file.type, size: data.length, data }).returning({ id: media.id });
+  return { url: `/media/${row.id}` };
+}
+
+// 
+
+async function uniqueSlug(table: typeof products | typeof categories, wanted: string, exceptId?: number) {
+  const base = slugify(wanted) || "item";
+  for (let i = 0; i < 50; i++) {
+    const candidate = i === 0 ? base : `${base}-${i + 1}`;
+    const where = exceptId ? and(eq(table.slug, candidate), ne(table.id, exceptId)) : eq(table.slug, candidate);
+    const [hit] = await db.select({ id: table.id }).from(table).where(where).limit(1);
+    if (!hit) return candidate;
+  }
+  return `${base}-${Date.now()}`;
+}
+
+export async function saveProduct(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const id = num(form, "id");
+  const fields: Record<string, string> = {};
+
+  const name = str(form, "name");
+  const price = num(form, "price");
+  const oldPrice = num(form, "oldPrice");
+  const stock = num(form, "stock") ?? 0;
+  const categoryId = num(form, "categoryId");
+
+  let images: string[] = [];
+  let specs: [string, string][] = [];
+  try {
+    images = (JSON.parse(str(form, "images") || "[]") as unknown[]).map(String).filter((u) => /^\/(media|img)\//.test(u));
+    specs = (JSON.parse(str(form, "specs") || "[]") as unknown[])
+      .filter((r): r is [string, string] => Array.isArray(r) && r.length === 2)
+      .map(([k, v]) => [String(k).trim(), String(v).trim()] as [string, string])
+      .filter(([k, v]) => k && v);
+  } catch {
+    return { error: "ფორმის მონაცემები დაზიანებულია, გადატვირთეთ გვერდი" };
+  }
+
+  if (name.length < 2) fields.name = "მიუთითეთ დასახელება";
+  if (price === null || !Number.isFinite(price) || price <= 0) fields.price = "მიუთითეთ ფასი";
+  if (oldPrice !== null && (!Number.isFinite(oldPrice) || oldPrice <= (price ?? 0)))
+    fields.oldPrice = "ძველი ფასი ახალზე მეტი უნდა იყოს (ან დატოვეთ ცარიელი)";
+  if (!Number.isInteger(stock) || stock < 0) fields.stock = "მარაგი არაუარყოფითი მთელი რიცხვია";
+  if (!categoryId) fields.categoryId = "აირჩიეთ კატეგორია";
+  if (Object.keys(fields).length) return { error: "შეასწორეთ მონიშნული ველები", fields };
+
+  const slug = await uniqueSlug(products, str(form, "slug") || name, id ?? undefined);
+  const values = {
+    name,
+    slug,
+    description: str(form, "description"),
+    price: price!,
+    oldPrice,
+    stock,
+    categoryId,
+    images,
+    specs,
+    active: form.get("active") === "on",
+    updatedAt: new Date(),
+  };
+
+  let savedId = id;
+  if (id) {
+    await db.update(products).set(values).where(eq(products.id, id));
+  } else {
+    const [row] = await db.insert(products).values(values).returning({ id: products.id });
+    savedId = row.id;
+  }
+  updateTag(TAGS.catalog);
+  if (!id) redirect(`/admin/products/${savedId}?saved=1`);
+  return { ok: true };
+}
+
+export async function deleteProduct(id: number) {
+  await requireAdmin();
+  await db.delete(products).where(eq(products.id, id));
+  updateTag(TAGS.catalog);
+  redirect("/admin/products");
+}
+
+export async function setProductActive(id: number, active: boolean) {
+  await requireAdmin();
+  await db.update(products).set({ active, updatedAt: new Date() }).where(eq(products.id, id));
+  updateTag(TAGS.catalog);
+}
+
+// 
+
+export async function saveCategory(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const id = num(form, "id");
+  const name = str(form, "name");
+  const parentId = num(form, "parentId");
+  const fields: Record<string, string> = {};
+  if (name.length < 2) fields.name = "მიუთითეთ დასახელება";
+  if (id && parentId === id) fields.parentId = "კატეგორია საკუთარი თავის ქვეკატეგორია ვერ იქნება";
+  if (parentId) {
+    const [parent] = await db.select().from(categories).where(eq(categories.id, parentId)).limit(1);
+    if (!parent) fields.parentId = "მშობელი კატეგორია ვერ მოიძებნა";
+    else if (parent.parentId) fields.parentId = "ქვეკატეგორიას ქვეკატეგორია ვერ ექნება";
+  }
+  if (id && parentId) {
+    const [child] = await db.select({ id: categories.id }).from(categories).where(eq(categories.parentId, id)).limit(1);
+    if (child) fields.parentId = "ამ კატეგორიას ქვეკატეგორიები აქვს, ის ვერ გახდება ქვეკატეგორია";
+  }
+  if (Object.keys(fields).length) return { error: "შეასწორეთ მონიშნული ველები", fields };
+
+  const values = {
+    name,
+    slug: await uniqueSlug(categories, str(form, "slug") || name, id ?? undefined),
+    parentId: parentId || null,
+    image: str(form, "image") || null,
+    sortOrder: num(form, "sortOrder") ?? 0,
+    active: form.get("active") === "on",
+  };
+  if (id) await db.update(categories).set(values).where(eq(categories.id, id));
+  else await db.insert(categories).values(values);
+  updateTag(TAGS.catalog);
+  redirect("/admin/categories?saved=1");
+}
+
+export async function deleteCategory(id: number) {
+  await requireAdmin();
+  // subcategories move up to the top level, products become uncategorised
+  await db.update(categories).set({ parentId: null }).where(eq(categories.parentId, id));
+  await db.delete(categories).where(eq(categories.id, id));
+  updateTag(TAGS.catalog);
+  redirect("/admin/categories");
+}
+
+// 
+
+const MAX_EXTRA_LINES = 3;
+
+export async function saveSlide(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const id = num(form, "id");
+  const image = str(form, "image");
+  const fields: Record<string, string> = {};
+  if (!/^\/(media|img)\//.test(image)) fields.image = "ატვირთეთ ფოტო";
+  const line1 = str(form, "line1");
+  const line2 = str(form, "line2");
+  if (!line1) fields.line1 = "მიუთითეთ სათაური";
+  if (Object.keys(fields).length) return { error: "შეასწორეთ მონიშნული ველები", fields };
+
+  const offer = str(form, "offer");
+  const extra = form
+    .getAll("extra")
+    .map((v) => String(v).trim())
+    .filter(Boolean)
+    .slice(0, MAX_EXTRA_LINES);
+  const titleLines = [
+    ...[line1, line2].filter(Boolean).map((text, i, arr) => (i === arr.length - 1 && offer ? { text, offer } : { text })),
+    ...extra.map((text) => ({ text })),
+  ];
+  const pick = <T extends string>(v: string, allowed: readonly T[], d: T) => (allowed.includes(v as T) ? (v as T) : d);
+
+  const values = {
+    image,
+    align: pick(str(form, "align"), ["left", "center", "right"] as const, "right"),
+    position: str(form, "position") || "center center",
+    shade: pick(str(form, "shade"), ["none", "left", "right"] as const, "none"),
+    titleLines,
+    primaryLabel: str(form, "primaryLabel"),
+    primaryHref: str(form, "primaryHref") || "/catalog",
+    secondaryLabel: str(form, "secondaryLabel"),
+    secondaryHref: str(form, "secondaryHref") || "/catalog",
+    active: form.get("active") === "on",
+  };
+  if (id) {
+    await db.update(heroSlides).set(values).where(eq(heroSlides.id, id));
+  } else {
+    const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${heroSlides.sortOrder}), -1)` }).from(heroSlides);
+    await db.insert(heroSlides).values({ ...values, sortOrder: Number(max) + 1 });
+  }
+  updateTag(TAGS.hero);
+  redirect("/admin/hero?saved=1");
+}
+
+export async function deleteSlide(id: number) {
+  await requireAdmin();
+  await db.delete(heroSlides).where(eq(heroSlides.id, id));
+  updateTag(TAGS.hero);
+  redirect("/admin/hero");
+}
+
+export async function moveSlide(id: number, dir: -1 | 1) {
+  await requireAdmin();
+  const all = await db.select({ id: heroSlides.id }).from(heroSlides).orderBy(heroSlides.sortOrder, heroSlides.id);
+  const i = all.findIndex((s) => s.id === id);
+  const j = i + dir;
+  if (i < 0 || j < 0 || j >= all.length) return;
+  [all[i], all[j]] = [all[j], all[i]];
+  await Promise.all(all.map((s, k) => db.update(heroSlides).set({ sortOrder: k }).where(eq(heroSlides.id, s.id))));
+  updateTag(TAGS.hero);
+}
+
+export async function setSlideActive(id: number, active: boolean) {
+  await requireAdmin();
+  await db.update(heroSlides).set({ active }).where(eq(heroSlides.id, id));
+  updateTag(TAGS.hero);
+}
+
+// 
+
+export async function setOrderStatus(id: number, status: OrderStatus) {
+  await requireAdmin();
+  if (!orderStatuses.some((s) => s.id === status)) return;
+  await db.update(orders).set({ status, updatedAt: new Date() }).where(eq(orders.id, id));
+  updateTag("orders");
+}
+
+export async function saveOrderNote(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const id = num(form, "id");
+  if (!id) return { error: "შეკვეთა ვერ მოიძებნა" };
+  await db
+    .update(orders)
+    .set({ adminNote: str(form, "adminNote").slice(0, 2000), updatedAt: new Date() })
+    .where(eq(orders.id, id));
+  updateTag("orders");
+  return { ok: true };
+}
+
+// 
+
+const MAX_LIST = 5;
+
+/** "facebook.com/x" -> "https://facebook.com/x"; null if it is not a web address */
+function normalizeUrl(v: string): string | null {
+  if (!v) return "";
+  const withProto = /^https?:\/\//i.test(v) ? v : `https://${v}`;
+  try {
+    const u = new URL(withProto);
+    return u.hostname.includes(".") ? u.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveSettings(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const list = (k: string) =>
+    [...new Set(form.getAll(k).map((v) => String(v).trim()).filter(Boolean))].slice(0, MAX_LIST);
+  const phones = list("phones");
+  const addresses = list("addresses");
+  const email = str(form, "email");
+  const fields: Record<string, string> = {};
+
+  if (phones.length === 0) fields.phones = "მიუთითეთ მინიმუმ ერთი ნომერი";
+  else if (phones.some((p) => p.replace(/\D/g, "").length < 6)) fields.phones = "ნომერი არასწორია";
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "ელფოსტა არასწორია";
+
+  const social: Record<"facebook" | "instagram" | "tiktok", string> = { facebook: "", instagram: "", tiktok: "" };
+  for (const k of ["facebook", "instagram", "tiktok"] as const) {
+    const url = normalizeUrl(str(form, k));
+    if (url === null) fields[k] = "ბმული არასწორია";
+    else social[k] = url;
+  }
+  if (Object.keys(fields).length) return { error: "შეასწორეთ მონიშნული ველები", fields };
+
+  const values = { phones, addresses, email, hours: str(form, "hours"), ...social, updatedAt: new Date() };
+  await db
+    .insert(siteSettings)
+    .values({ id: 1, ...values })
+    .onConflictDoUpdate({ target: siteSettings.id, set: values });
+  updateTag(TAGS.settings);
+  return { ok: true };
+}
+
+// 
+
+export async function savePromo(_prev: FormState, form: FormData): Promise<FormState> {
+  await requireAdmin();
+  const fields: Record<string, string> = {};
+  const code = normalizePromo(str(form, "code"));
+  const percent = num(form, "percent");
+  const single = str(form, "kind") !== "multi";
+  const days = num(form, "days");
+  const uses = single ? 1 : num(form, "uses");
+
+  if (!PROMO_RE.test(code)) fields.code = "3-დან 32 სიმბოლომდე: ლათინური ასოები, ციფრები, - და _";
+  if (percent === null || !Number.isInteger(percent) || percent < 1 || percent > 100) fields.percent = "მიუთითეთ 1-დან 100-მდე";
+  if (days !== null && (!Number.isInteger(days) || days < 1 || days > 3650)) fields.days = "დღეების რაოდენობა 1-დან 3650-მდე";
+  if (!single && uses !== null && (!Number.isInteger(uses) || uses < 1 || uses > 1_000_000)) fields.uses = "მიუთითეთ დადებითი მთელი რიცხვი";
+  if (!fields.code) {
+    const [hit] = await db.select({ id: promoCodes.id }).from(promoCodes).where(eq(promoCodes.code, code)).limit(1);
+    if (hit) fields.code = "ასეთი კოდი უკვე არსებობს";
+  }
+  if (Object.keys(fields).length) return { error: "შეასწორეთ მონიშნული ველები", fields };
+
+  await db.insert(promoCodes).values({
+    code,
+    percent: percent!,
+    maxUses: uses,
+    expiresAt: days ? new Date(Date.now() + days * 24 * 60 * 60 * 1000) : null,
+  });
+  redirect(`/admin/promo?created=${encodeURIComponent(code)}`);
+}
+
+export async function setPromoActive(id: number, active: boolean) {
+  await requireAdmin();
+  await db.update(promoCodes).set({ active }).where(eq(promoCodes.id, id));
+}
+
+export async function deletePromo(id: number) {
+  await requireAdmin();
+  await db.delete(promoCodes).where(eq(promoCodes.id, id));
+  redirect("/admin/promo");
+}

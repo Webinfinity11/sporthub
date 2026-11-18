@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local PGlite dev database
+/.devdb
+
+# browser-saved reference page (local only)
+/public/SportHub —*
