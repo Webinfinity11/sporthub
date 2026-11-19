@@ -77,6 +77,7 @@ export async function getHeroSlides(): Promise<Slide[]> {
     .map((s) => ({
       id: s.id,
       image: s.image,
+      video: s.video,
       align: s.align,
       position: s.position,
       shade: s.shade,

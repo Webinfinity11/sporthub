@@ -4,12 +4,14 @@ import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { categories, db, heroSlides, media, orders, products, promoCodes, siteSettings, type OrderStatus } from "@/db";
 import { checkCredentials, createSessionToken, requireAdmin, SESSION_COOKIE } from "@/lib/auth";
 import { normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
 import { TAGS } from "@/lib/queries";
 import { slugify } from "@/lib/slug";
-import { isImageUrl, putImage, r2Enabled } from "@/lib/storage";
+import { optimizeImage, releaseMedia, sweepOrphans } from "@/lib/media";
+import { isImageUrl, isVideoUrl, newKey, presignPut, publicUrl, putObject, r2Enabled } from "@/lib/storage";
 
 export type FormState = { ok?: boolean; error?: string; fields?: Record<string, string> } | null;
 
@@ -62,17 +64,40 @@ export async function uploadImage(form: FormData): Promise<{ url?: string; error
   if (!(file instanceof File) || file.size === 0) return { error: "ფაილი ვერ მოიძებნა" };
   if (!IMAGE_TYPES.includes(file.type)) return { error: "დაშვებულია JPG, PNG, WEBP, AVIF ან GIF" };
   if (file.size > MAX_IMAGE) return { error: "ფაილი 8 MB-ზე დიდია" };
-  const data = Buffer.from(await file.arrayBuffer());
+  const { data, mime } = await optimizeImage(Buffer.from(await file.arrayBuffer()), file.type);
   if (r2Enabled) {
+    after(() => sweepOrphans());
     try {
-      return { url: await putImage(new Uint8Array(data), file.type) };
+      return { url: await putObject(new Uint8Array(data), mime) };
     } catch (e) {
       console.error(e);
       return { error: "ატვირთვა ვერ მოხერხდა, სცადეთ თავიდან" };
     }
   }
-  const [row] = await db.insert(media).values({ mime: file.type, size: data.length, data }).returning({ id: media.id });
+  const [row] = await db.insert(media).values({ mime, size: data.length, data }).returning({ id: media.id });
   return { url: `/media/${row.id}` };
+}
+
+const VIDEO_TYPES = ["video/mp4", "video/webm"];
+const MAX_VIDEO = 50 * 1024 * 1024;
+
+/**
+ * Hero videos are too large to pass through a server action, so the browser uploads them
+ * straight to R2 with a short-lived signed URL. Returns that URL and the file's public URL.
+ */
+export async function createVideoUpload(
+  type: string,
+  size: number,
+): Promise<{ uploadUrl?: string; headers?: Record<string, string>; url?: string; error?: string }> {
+  await requireAdmin();
+  if (!r2Enabled) return { error: "ვიდეოს ატვირთვა ხელმისაწვდომია მხოლოდ R2 საცავით" };
+  if (!VIDEO_TYPES.includes(type)) return { error: "დაშვებულია MP4 ან WebM" };
+  if (!Number.isInteger(size) || size <= 0) return { error: "ფაილი ვერ მოიძებნა" };
+  if (size > MAX_VIDEO) return { error: "ვიდეო 50 MB-ზე დიდია" };
+  after(() => sweepOrphans());
+  const key = newKey(type);
+  const signed = await presignPut(key, type, size);
+  return { uploadUrl: signed.url, headers: signed.headers, url: publicUrl(key) };
 }
 
 // 
@@ -136,7 +161,9 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
 
   let savedId = id;
   if (id) {
+    const [old] = await db.select({ images: products.images }).from(products).where(eq(products.id, id)).limit(1);
     await db.update(products).set(values).where(eq(products.id, id));
+    await releaseMedia((old?.images ?? []).filter((u) => !images.includes(u)));
   } else {
     // New products go to the top of the list (and of the catalog).
     const [{ min }] = await db.select({ min: sql<number>`coalesce(min(${products.sortOrder}), 1)` }).from(products);
@@ -150,7 +177,8 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
 
 export async function deleteProduct(id: number) {
   await requireAdmin();
-  await db.delete(products).where(eq(products.id, id));
+  const [old] = await db.delete(products).where(eq(products.id, id)).returning({ images: products.images });
+  await releaseMedia(old?.images ?? []);
   updateTag(TAGS.catalog);
   redirect("/admin/products");
 }
@@ -220,12 +248,17 @@ export async function saveCategory(_prev: FormState, form: FormData): Promise<Fo
     return Number(max) + 1;
   };
   if (id) {
-    const [old] = await db.select({ parentId: categories.parentId }).from(categories).where(eq(categories.id, id)).limit(1);
+    const [old] = await db
+      .select({ parentId: categories.parentId, image: categories.image })
+      .from(categories)
+      .where(eq(categories.id, id))
+      .limit(1);
     const moved = (old?.parentId ?? null) !== values.parentId;
     await db
       .update(categories)
       .set(moved ? { ...values, sortOrder: await lastInGroup() } : values)
       .where(eq(categories.id, id));
+    if (old?.image !== values.image) await releaseMedia([old?.image]);
   } else {
     await db.insert(categories).values({ ...values, sortOrder: await lastInGroup() });
   }
@@ -257,7 +290,8 @@ export async function deleteCategory(id: number) {
   await requireAdmin();
   // subcategories move up to the top level, products become uncategorised
   await db.update(categories).set({ parentId: null }).where(eq(categories.parentId, id));
-  await db.delete(categories).where(eq(categories.id, id));
+  const [old] = await db.delete(categories).where(eq(categories.id, id)).returning({ image: categories.image });
+  await releaseMedia([old?.image]);
   updateTag(TAGS.catalog);
   redirect("/admin/categories");
 }
@@ -272,6 +306,8 @@ export async function saveSlide(_prev: FormState, form: FormData): Promise<FormS
   const image = str(form, "image");
   const fields: Record<string, string> = {};
   if (!isImageUrl(image)) fields.image = "ატვირთეთ ფოტო";
+  const video = str(form, "video") || null;
+  if (video && !isVideoUrl(video)) fields.video = "ვიდეო ვერ მოიძებნა, ატვირთეთ თავიდან";
   const line1 = str(form, "line1");
   const line2 = str(form, "line2");
   if (!line1) fields.line1 = "მიუთითეთ სათაური";
@@ -291,6 +327,7 @@ export async function saveSlide(_prev: FormState, form: FormData): Promise<FormS
 
   const values = {
     image,
+    video,
     align: pick(str(form, "align"), ["left", "center", "right"] as const, "right"),
     position: str(form, "position") || "center center",
     shade: pick(str(form, "shade"), ["none", "left", "right"] as const, "none"),
@@ -302,7 +339,9 @@ export async function saveSlide(_prev: FormState, form: FormData): Promise<FormS
     active: form.get("active") === "on",
   };
   if (id) {
+    const [old] = await db.select({ image: heroSlides.image, video: heroSlides.video }).from(heroSlides).where(eq(heroSlides.id, id)).limit(1);
     await db.update(heroSlides).set(values).where(eq(heroSlides.id, id));
+    await releaseMedia([old?.image, old?.video].filter((u) => u !== image && u !== video));
   } else {
     const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${heroSlides.sortOrder}), -1)` }).from(heroSlides);
     await db.insert(heroSlides).values({ ...values, sortOrder: Number(max) + 1 });
@@ -313,7 +352,8 @@ export async function saveSlide(_prev: FormState, form: FormData): Promise<FormS
 
 export async function deleteSlide(id: number) {
   await requireAdmin();
-  await db.delete(heroSlides).where(eq(heroSlides.id, id));
+  const [old] = await db.delete(heroSlides).where(eq(heroSlides.id, id)).returning({ image: heroSlides.image, video: heroSlides.video });
+  await releaseMedia([old?.image, old?.video]);
   updateTag(TAGS.hero);
   redirect("/admin/hero");
 }

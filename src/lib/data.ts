@@ -34,6 +34,8 @@ export type Product = {
 export type Slide = {
   id: number;
   image: string;
+  /** optional background video; `image` is its poster */
+  video?: string | null;
   align: "left" | "center" | "right";
   position: string;
   shade: "none" | "left" | "right";

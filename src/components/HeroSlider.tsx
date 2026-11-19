@@ -24,6 +24,46 @@ const lineTop = (lines: readonly number[], i: number) => lines[i] ?? lines[lines
 const edge = (align: "left" | "center" | "right", h: number) =>
   align === "center" ? {} : { [align]: h };
 
+/**
+ * Background video of a slide. Only the visible slide loads and plays; the others stay paused
+ * on their poster. With reduced motion turned on, or if autoplay is blocked, the poster photo shows.
+ */
+function SlideVideo({ src, poster, position, active }: { src: string; poster: string; position: string; active: boolean }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const [still, setStill] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const sync = () => setStill(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  useEffect(() => {
+    const v = ref.current;
+    if (!v) return;
+    if (active && !still) v.play().catch(() => {});
+    else v.pause();
+  }, [active, still]);
+
+  if (still) return null;
+  return (
+    <video
+      ref={ref}
+      className="slide-video"
+      src={src}
+      poster={poster}
+      muted
+      loop
+      playsInline
+      preload={active ? "auto" : "none"}
+      aria-hidden
+      style={{ objectPosition: position || "center center" }}
+    />
+  );
+}
+
 export default function HeroSlider({ slides }: { slides: Slide[] }) {
   const [index, setIndex] = useState(0);
   const [scale, setScale] = useState(1);
@@ -64,7 +104,9 @@ export default function HeroSlider({ slides }: { slides: Slide[] }) {
             <div
               className="slide-bg"
               style={{ backgroundImage: `url(${s.image})`, backgroundPosition: s.position ?? "top center" }}
-            />
+            >
+              {s.video && <SlideVideo src={s.video} poster={s.image} position={s.position} active={active} />}
+            </div>
             {s.shade !== "none" && <div className={`slide-shade ${s.shade}`} aria-hidden />}
             {active && (
               <div

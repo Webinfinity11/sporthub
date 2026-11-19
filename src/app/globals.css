@@ -539,6 +539,13 @@ ul {
   transition: transform 9s linear;
 }
 .rev_slider_wrapper .slide.active .slide-bg { transform: scale(1); }
+.rev_slider_wrapper .slide-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
 .rev_slider_wrapper .slide-shade { position: absolute; inset: 0; }
 .rev_slider_wrapper .slide-shade.right {
   background: linear-gradient(to left, rgba(31, 41, 55, 0.88) 0%, rgba(31, 41, 55, 0.6) 38%, rgba(31, 41, 55, 0) 62%);

@@ -58,5 +58,14 @@ Set these variables on Railway (and in `.env.local` to test locally):
 - `R2_BUCKET` = bucket name
 - `R2_PUBLIC_URL` = the bucket's public URL, e.g. `https://media.example.com` or `https://pub-xxxx.r2.dev`
 
+- `MEDIA_SWEEP` = `on` on the live server only: every few hours it deletes uploads older than 24 hours that
+  nothing in the database uses (forms that were never saved). Never set it locally when `.env.local` points at
+  the production bucket, since the local database does not know the production files.
+
+Photos are resized to at most 2400px and stored as WebP. Hero slides can have a background video (MP4 or WebM,
+up to 50 MB) that the browser uploads straight to R2; the bucket needs a CORS rule allowing PUT with
+`content-type` and `cache-control` headers. Files removed from a product, category or slide, or belonging to a
+deleted one, are deleted from storage unless something else (another item, an old order) still uses them.
+
 Without them uploads fall back to Postgres (`/media/<id>`). To move images already stored in Postgres to R2,
 run `npm run media:r2` with production `DATABASE_URL`, check the site, then `npm run media:r2 -- --delete`.

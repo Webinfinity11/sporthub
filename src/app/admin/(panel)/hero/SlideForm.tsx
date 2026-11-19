@@ -5,11 +5,13 @@ import { useActionState, useState } from "react";
 import { FaArrowLeft, FaPlus, FaTimes } from "react-icons/fa";
 import { deleteSlide, saveSlide, type FormState } from "@/app/admin/actions";
 import ImageUploader from "@/components/admin/ImageUploader";
+import VideoUploader from "@/components/admin/VideoUploader";
 import { ConfirmButton, FieldError, SubmitButton } from "@/components/admin/ui";
 
 export type SlideData = {
   id?: number;
   image: string;
+  video: string;
   align: "left" | "center" | "right";
   position: string;
   shade: "none" | "left" | "right";
@@ -62,6 +64,7 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
   const [s, setS] = useState(slide);
   const set = <K extends keyof SlideData>(k: K, v: SlideData[K]) => setS((x) => ({ ...x, [k]: v }));
   const [image, setImage] = useState(slide.image);
+  const [video, setVideo] = useState(slide.video);
   const f = state?.fields ?? {};
 
   return (
@@ -84,6 +87,7 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
       {/* live preview: same layout rules as the storefront hero */}
       <section className="adm-hero-preview" aria-label="გადახედვა">
         <div className="pv-bg" style={{ backgroundImage: image ? `url(${image})` : undefined, backgroundPosition: s.position }} />
+        {video && <video key={video} className="pv-video" src={video} poster={image || undefined} muted loop autoPlay playsInline style={{ objectPosition: s.position }} />}
         {s.shade !== "none" && <div className={`pv-shade ${s.shade}`} />}
         <div className={`pv-text ${s.align}`}>
           {s.line1 && <div className="pv-h1">{s.line1}</div>}
@@ -204,6 +208,7 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
               onChange={(u) => setImage(u[0] ?? "")}
             />
             <FieldError msg={f.image} />
+            <p className="adm-hint">ვიდეოიან სლაიდზე ეს ფოტო ჩანს ვიდეოს ჩატვირთვამდე.</p>
             <div className="adm-field">
               <label htmlFor="position">ფოტოს ფოკუსი</label>
               <select id="position" name="position" value={s.position} onChange={(e) => set("position", e.target.value)}>
@@ -215,6 +220,15 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
                 ))}
               </select>
             </div>
+          </section>
+
+          <section className="adm-panel">
+            <div className="adm-panel-head">
+              <h2>ვიდეო</h2>
+            </div>
+            <VideoUploader name="video" initial={slide.video} onChange={setVideo} />
+            <FieldError msg={f.video} />
+            <p className="adm-hint">არასავალდებულოა. ვიდეო ხმის გარეშე ტრიალებს ფოტოს ნაცვლად.</p>
           </section>
 
           <section className="adm-panel">

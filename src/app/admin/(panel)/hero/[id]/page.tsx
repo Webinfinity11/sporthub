@@ -25,6 +25,7 @@ export default async function EditSlidePage({ params }: PageProps<"/admin/hero/[
       slide={{
         id: s.id,
         image: s.image,
+        video: s.video ?? "",
         align: s.align,
         position: s.position,
         shade: s.shade,

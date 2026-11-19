@@ -63,7 +63,10 @@ export type TitleLine = { text: string; offer?: string };
 
 export const heroSlides = pgTable("hero_slides", {
   id: serial("id").primaryKey(),
+  /** photo; for a video slide it is the poster shown while the video loads and when motion is reduced */
   image: text("image").notNull(),
+  /** optional background video (R2 URL, MP4 or WebM) */
+  video: text("video"),
   align: text("align").$type<"left" | "center" | "right">().notNull().default("right"),
   /** CSS background-position of the photo */
   position: text("position").notNull().default("center center"),

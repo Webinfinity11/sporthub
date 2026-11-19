@@ -14,6 +14,7 @@ export default async function NewSlidePage() {
       links={await heroLinkOptions()}
       slide={{
         image: "",
+        video: "",
         align: "right",
         position: "center center",
         shade: "right",
