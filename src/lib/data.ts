@@ -21,6 +21,9 @@ export type Product = {
   images: string[];
   price: number;
   oldPrice: number | null;
+  /** delivery price inside Tbilisi / outside Tbilisi, ₾ (0 = free) */
+  deliveryTbilisi: number;
+  deliveryRegions: number;
   categoryId: number | null;
   /** slug of the product's own category (may be a subcategory) */
   categorySlug: string | null;
@@ -33,7 +36,8 @@ export type Product = {
 
 export type Slide = {
   id: number;
-  image: string;
+  /** photo; a video slide may have none */
+  image: string | null;
   /** optional background video; `image` is its poster */
   video?: string | null;
   align: "left" | "center" | "right";
@@ -103,15 +107,35 @@ export const benefits = [
 const priceFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 export const formatPrice = (n: number) => `${priceFormat.format(n).replace(/,/g, " ")} ₾`;
 
+/** Search words of a query: lower case, split on spaces. */
+export const searchTerms = (q: string) => q.toLowerCase().split(/\s+/).filter(Boolean);
+
+/** A product matches when every word of the query appears in its name (any order, any part of a word). */
+export const matchesSearch = (p: Pick<Product, "name">, terms: string[]) => {
+  const name = p.name.toLowerCase();
+  return terms.every((t) => name.includes(t));
+};
+
 export const discountPercent = (p: Pick<Product, "price" | "oldPrice">) =>
   p.oldPrice && p.oldPrice > p.price ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
 
 // Checkout settings (test values)
+export const TBILISI = "თბილისი";
+
 export const delivery = {
-  freeFrom: 300, // ₾: free delivery from this subtotal
-  price: 15, // ₾
-  cities: ["თბილისი", "ბათუმი", "ქუთაისი", "რუსთავი", "ზუგდიდი", "გორი", "თელავი", "სხვა"],
+  cities: [TBILISI, "ბათუმი", "ქუთაისი", "რუსთავი", "ზუგდიდი", "გორი", "თელავი", "სხვა"],
 };
+
+export type DeliveryZone = "tbilisi" | "regions";
+
+/** Tbilisi has its own price, every other city pays the regional one. No city chosen yet = null. */
+export const zoneOf = (city: string): DeliveryZone | null => (!city ? null : city === TBILISI ? "tbilisi" : "regions");
+
+type Deliverable = Pick<Product, "deliveryTbilisi" | "deliveryRegions">;
+
+/** Delivery of an order: each product's price for the zone, added up once per product (quantity does not change it). */
+export const deliveryCost = (items: Deliverable[], zone: DeliveryZone) =>
+  Math.round(items.reduce((s, p) => s + (zone === "tbilisi" ? p.deliveryTbilisi : p.deliveryRegions), 0) * 100) / 100;
 
 export const paymentMethods = [
   { id: "cash", label: "ადგილზე გადახდა", hint: "ნაღდი ან ბარათი კურიერთან" },
@@ -121,8 +145,6 @@ export const paymentMethods = [
 
 export type PaymentMethod = (typeof paymentMethods)[number]["id"];
 
-export const deliveryCost = (subtotal: number) =>
-  subtotal === 0 || subtotal >= delivery.freeFrom ? 0 : delivery.price;
 
 /** promo discount on the products (delivery is not discounted), rounded to tetri */
 export const promoDiscount = (subtotal: number, percent: number) => Math.round(subtotal * percent) / 100;

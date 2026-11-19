@@ -633,7 +633,8 @@ a.adm-kpi:hover { border-color: #cbd5e1; }
 }
 .adm-slides li.is-muted .adm-slide-thumb img { opacity: 0.45; }
 .adm-slide-thumb { position: relative; display: block; aspect-ratio: 1170 / 520; border-radius: var(--a-r); overflow: hidden; background: #111827; }
-.adm-slide-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.adm-slide-thumb img,
+.adm-slide-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .adm-slide-thumb .pos {
   position: absolute;
   top: 6px;

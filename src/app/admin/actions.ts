@@ -123,6 +123,8 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
   const oldPrice = num(form, "oldPrice");
   const stock = num(form, "stock") ?? 0;
   const categoryId = num(form, "categoryId");
+  const deliveryTbilisi = num(form, "deliveryTbilisi");
+  const deliveryRegions = num(form, "deliveryRegions");
 
   let images: string[] = [];
   let specs: [string, string][] = [];
@@ -142,6 +144,9 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     fields.oldPrice = "ძველი ფასი ახალზე მეტი უნდა იყოს (ან დატოვეთ ცარიელი)";
   if (!Number.isInteger(stock) || stock < 0) fields.stock = "მარაგი არაუარყოფითი მთელი რიცხვია";
   if (!categoryId) fields.categoryId = "აირჩიეთ კატეგორია";
+  const shipOk = (v: number | null) => v !== null && Number.isFinite(v) && v >= 0 && v <= 10000;
+  if (!shipOk(deliveryTbilisi)) fields.deliveryTbilisi = "მიუთითეთ ფასი (0 = უფასო)";
+  if (!shipOk(deliveryRegions)) fields.deliveryRegions = "მიუთითეთ ფასი (0 = უფასო)";
   if (Object.keys(fields).length) return { error: "შეასწორეთ მონიშნული ველები", fields };
 
   const slug = await uniqueSlug(products, str(form, "slug") || name, id ?? undefined);
@@ -151,6 +156,8 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
     description: str(form, "description"),
     price: price!,
     oldPrice,
+    deliveryTbilisi: deliveryTbilisi!,
+    deliveryRegions: deliveryRegions!,
     stock,
     categoryId,
     images,
@@ -303,11 +310,13 @@ const MAX_EXTRA_LINES = 3;
 export async function saveSlide(_prev: FormState, form: FormData): Promise<FormState> {
   await requireAdmin();
   const id = num(form, "id");
-  const image = str(form, "image");
-  const fields: Record<string, string> = {};
-  if (!isImageUrl(image)) fields.image = "ატვირთეთ ფოტო";
+  const image = str(form, "image") || null;
   const video = str(form, "video") || null;
+  const fields: Record<string, string> = {};
+  // a slide needs a photo or a video (or both: the photo is then the video's poster)
+  if (image && !isImageUrl(image)) fields.image = "ფოტო ვერ მოიძებნა, ატვირთეთ თავიდან";
   if (video && !isVideoUrl(video)) fields.video = "ვიდეო ვერ მოიძებნა, ატვირთეთ თავიდან";
+  if (!image && !video) fields.image = "ატვირთეთ ფოტო ან ვიდეო";
   const line1 = str(form, "line1");
   const line2 = str(form, "line2");
   if (!line1) fields.line1 = "მიუთითეთ სათაური";

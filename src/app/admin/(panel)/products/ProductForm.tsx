@@ -16,6 +16,8 @@ export type ProductFormData = {
   description: string;
   price: number | null;
   oldPrice: number | null;
+  deliveryTbilisi: number | null;
+  deliveryRegions: number | null;
   stock: number;
   categoryId: number | null;
   images: string[];
@@ -163,6 +165,31 @@ export default function ProductForm({ product, categories, saved }: { product: P
               </div>
             </div>
             <FieldError msg={f.oldPrice} />
+            <div className="adm-field-row">
+              <div className="adm-field">
+                <label htmlFor="deliveryTbilisi">მიწოდება თბილისში, ₾</label>
+                <input
+                  id="deliveryTbilisi"
+                  name="deliveryTbilisi"
+                  inputMode="decimal"
+                  defaultValue={product.deliveryTbilisi ?? ""}
+                  aria-invalid={f.deliveryTbilisi ? true : undefined}
+                />
+                <FieldError msg={f.deliveryTbilisi} />
+              </div>
+              <div className="adm-field">
+                <label htmlFor="deliveryRegions">მიწოდება რეგიონებში, ₾</label>
+                <input
+                  id="deliveryRegions"
+                  name="deliveryRegions"
+                  inputMode="decimal"
+                  defaultValue={product.deliveryRegions ?? ""}
+                  aria-invalid={f.deliveryRegions ? true : undefined}
+                />
+                <FieldError msg={f.deliveryRegions} />
+              </div>
+            </div>
+            <p className="adm-hint">0 ნიშნავს უფასო მიწოდებას. კალათაში თითო პროდუქტის მიწოდება ერთხელ ემატება.</p>
             <div className="adm-field">
               <label htmlFor="stock">მარაგი, ცალი</label>
               <input id="stock" name="stock" type="number" min={0} defaultValue={product.stock} aria-invalid={f.stock ? true : undefined} />

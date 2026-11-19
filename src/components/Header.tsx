@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
-import { FaCaretRight, FaRegHeart, FaTimesCircle } from "react-icons/fa";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { FaCaretRight, FaRegHeart, FaSearch, FaTimesCircle } from "react-icons/fa";
 import { HiOutlineShoppingBag } from "react-icons/hi";
 import { formatPrice, productHref, type NavItem } from "@/lib/data";
+import HeaderSearch from "./HeaderSearch";
 import { useStore } from "./Store";
 
 export default function Header({ nav }: { nav: NavItem[] }) {
@@ -16,12 +17,19 @@ export default function Header({ nav }: { nav: NavItem[] }) {
   const [height, setHeight] = useState(0);
   const pathname = usePathname();
   const [lastPath, setLastPath] = useState(pathname);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const closeSearch = useCallback(() => setSearchOpen(false), []);
+  const openSearch = () => {
+    setMobileOpen(false);
+    setSearchOpen(true);
+  };
 
-  // close the mobile menu after navigating
+  // close the mobile menu and the search after navigating
   if (pathname !== lastPath) {
     setLastPath(pathname);
     setMobileOpen(false);
     setOpenSub(null);
+    setSearchOpen(false);
   }
 
   useEffect(() => {
@@ -49,6 +57,10 @@ export default function Header({ nav }: { nav: NavItem[] }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/brand/logo-on-dark.png" alt="SportHub" width={247} height={56} />
             </Link>
+
+            <button type="button" className="search-toggle" aria-label="ძებნა" aria-expanded={searchOpen} onClick={openSearch}>
+              <FaSearch />
+            </button>
 
             <button
               className="menu-toggle"
@@ -98,6 +110,14 @@ export default function Header({ nav }: { nav: NavItem[] }) {
                   </li>
                 );
               })}
+
+              <li className="search-link">
+                <button type="button" aria-label="ძებნა" aria-expanded={searchOpen} onClick={openSearch}>
+                  <span className="cart-icon">
+                    <FaSearch />
+                  </span>
+                </button>
+              </li>
 
               <li className="wishlist-link">
                 <Link href="/wishlist" aria-label={`სურვილების სია (${store.wishlist.length})`}>
@@ -168,6 +188,8 @@ export default function Header({ nav }: { nav: NavItem[] }) {
             </ul>
           </nav>
         </div>
+        {/* mounted only while open, so every search starts empty */}
+        {searchOpen && <HeaderSearch onClose={closeSearch} />}
 
       </header>
       {sticky && <div style={{ height }} aria-hidden />}

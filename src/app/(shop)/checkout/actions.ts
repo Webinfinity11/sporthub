@@ -4,7 +4,7 @@ import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { db, orderItems, orders, products, promoCodes } from "@/db";
-import { deliveryCost, normalizePromo, paymentMethods, PROMO_RE, promoDiscount } from "@/lib/data";
+import { delivery, deliveryCost, normalizePromo, paymentMethods, PROMO_RE, promoDiscount, zoneOf } from "@/lib/data";
 
 export type OrderState =
   | { status: "idle" }
@@ -57,7 +57,8 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
 
   if (name.length < 2) fields.name = "მიუთითეთ სახელი და გვარი";
   if (!/^(\+?995)?5\d{8}$/.test(phone)) fields.phone = "მიუთითეთ სწორი მობილურის ნომერი (5XX XXX XXX)";
-  if (!city) fields.city = "აირჩიეთ ქალაქი";
+  const zone = zoneOf(city);
+  if (!zone || !delivery.cities.includes(city)) fields.city = "აირჩიეთ ქალაქი";
   if (address.length < 5) fields.address = "მიუთითეთ მისამართი";
   if (!paymentMethods.some((m) => m.id === payment)) fields.payment = "აირჩიეთ გადახდის მეთოდი";
 
@@ -85,8 +86,11 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   }
 
   const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
-  // free delivery is decided on the full product sum, before the promo discount
-  const ship = deliveryCost(subtotal);
+  // each product's delivery price for the chosen zone, from the database (promo codes do not touch it)
+  const ship = deliveryCost(
+    lines.map((l) => l.product),
+    zone!,
+  );
   const number = `SH-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 10)}`;
   let discount = 0;
   let total = subtotal + ship;

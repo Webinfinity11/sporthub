@@ -49,6 +49,8 @@ export async function getProducts(): Promise<Product[]> {
         images: p.images,
         price: p.price,
         oldPrice: p.oldPrice,
+        deliveryTbilisi: p.deliveryTbilisi,
+        deliveryRegions: p.deliveryRegions,
         categoryId: p.categoryId,
         categorySlug: cat?.slug ?? null,
         rootSlug: root?.slug ?? null,

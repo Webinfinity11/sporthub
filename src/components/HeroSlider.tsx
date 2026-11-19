@@ -28,7 +28,7 @@ const edge = (align: "left" | "center" | "right", h: number) =>
  * Background video of a slide. Only the visible slide loads and plays; the others stay paused
  * on their poster. With reduced motion turned on, or if autoplay is blocked, the poster photo shows.
  */
-function SlideVideo({ src, poster, position, active }: { src: string; poster: string; position: string; active: boolean }) {
+function SlideVideo({ src, poster, position, active }: { src: string; poster: string | null; position: string; active: boolean }) {
   const ref = useRef<HTMLVideoElement>(null);
   const [still, setStill] = useState(false);
 
@@ -47,17 +47,19 @@ function SlideVideo({ src, poster, position, active }: { src: string; poster: st
     else v.pause();
   }, [active, still]);
 
-  if (still) return null;
+  // reduced motion: the poster photo is enough; without one, show the video's first frame, paused
+  if (still && poster) return null;
   return (
     <video
       ref={ref}
       className="slide-video"
       src={src}
-      poster={poster}
+      poster={poster ?? undefined}
       muted
       loop
       playsInline
-      preload={active ? "auto" : "none"}
+      // without a poster, load the first frame so the slide is not blank while it fades in
+      preload={active ? "auto" : poster ? "none" : "metadata"}
       aria-hidden
       style={{ objectPosition: position || "center center" }}
     />
@@ -69,6 +71,7 @@ export default function HeroSlider({ slides }: { slides: Slide[] }) {
   const [scale, setScale] = useState(1);
   const wrapRef = useRef<HTMLElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const touchX = useRef<number | null>(null);
 
   const go = useCallback((dir: number) => {
     setIndex((i) => (i + dir + slides.length) % slides.length);
@@ -93,7 +96,14 @@ export default function HeroSlider({ slides }: { slides: Slide[] }) {
     <section
       ref={wrapRef}
       className="rev_slider_wrapper slider-5"
-      style={{ height: Math.max(GRID_H * scale, 380) }}
+      style={{ "--hero-h": `${Math.max(GRID_H * scale, 380)}px` } as React.CSSProperties}
+      onTouchStart={(e) => (touchX.current = e.touches[0].clientX)}
+      onTouchEnd={(e) => {
+        if (touchX.current === null) return;
+        const dx = e.changedTouches[0].clientX - touchX.current;
+        touchX.current = null;
+        if (Math.abs(dx) > 45 && slides.length > 1) go(dx < 0 ? 1 : -1);
+      }}
     >
       {slides.map((s, i) => {
         const pos = layout[s.align];
@@ -103,7 +113,7 @@ export default function HeroSlider({ slides }: { slides: Slide[] }) {
           <div key={s.id} className={`slide${active ? " active" : ""}`} aria-hidden={!active}>
             <div
               className="slide-bg"
-              style={{ backgroundImage: `url(${s.image})`, backgroundPosition: s.position ?? "top center" }}
+              style={{ backgroundImage: s.image ? `url(${s.image})` : undefined, backgroundPosition: s.position ?? "top center" }}
             >
               {s.video && <SlideVideo src={s.video} poster={s.image} position={s.position} active={active} />}
             </div>
@@ -136,18 +146,59 @@ export default function HeroSlider({ slides }: { slides: Slide[] }) {
                       {s.primaryCta.label} <FaCaretRight />
                     </span>
                   </Link>
-                  <Link href={s.secondaryCta.href} className="thm-btn borderd arrow-push-in-right">
-                    <span>
-                      {s.secondaryCta.label} <FaCaretRight />
-                    </span>
-                  </Link>
+                  {s.secondaryCta.label && (
+                    <Link href={s.secondaryCta.href} className="thm-btn borderd arrow-push-in-right">
+                      <span>
+                        {s.secondaryCta.label} <FaCaretRight />
+                      </span>
+                    </Link>
+                  )}
                 </div>
+              </div>
+            )}
+            {/* phones: the same text in normal flow at the bottom of the slide, instead of the scaled 1170px grid */}
+            {active && (
+              <div className={`layers-m align-${s.align}`}>
+                {s.titleLines.map((line, li) => (
+                  <div key={line.text} className={`m-line ${li % 2 ? "in-right" : "in-left"}`} style={{ animationDelay: `${0.3 + li * 0.25}s` }}>
+                    {line.text}
+                    {line.offer && (
+                      <>
+                        {" "}
+                        <span className="offer-box">
+                          <span className="inner">{line.offer}</span>
+                        </span>
+                      </>
+                    )}
+                  </div>
+                ))}
+                {(s.primaryCta.label || s.secondaryCta.label) && (
+                  <div className="m-buttons in-up" style={{ animationDelay: `${0.5 + s.titleLines.length * 0.25}s` }}>
+                    {s.primaryCta.label && (
+                      <Link href={s.primaryCta.href} className="thm-btn">
+                        {s.primaryCta.label} <FaCaretRight />
+                      </Link>
+                    )}
+                    {s.secondaryCta.label && (
+                      <Link href={s.secondaryCta.href} className="thm-btn borderd">
+                        {s.secondaryCta.label} <FaCaretRight />
+                      </Link>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
         );
       })}
 
+      {slides.length > 1 && (
+        <div className="hero-dots">
+          {slides.map((s, i) => (
+            <button key={s.id} type="button" aria-label={`სლაიდი ${i + 1}`} aria-current={i === index} onClick={() => setIndex(i)} />
+          ))}
+        </div>
+      )}
       <button className="tparrows tp-leftarrow" aria-label="წინა სლაიდი" onClick={() => go(-1)}>
         <FaChevronLeft />
       </button>

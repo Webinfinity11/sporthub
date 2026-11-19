@@ -35,7 +35,11 @@ export default async function HeroPage() {
           {slides.map((s, i) => (
             <li key={s.id} className={s.active ? undefined : "is-muted"}>
               <Link href={`/admin/hero/${s.id}`} className="adm-slide-thumb">
-                <img src={s.image} alt="" style={{ objectPosition: s.position }} />
+                {s.image ? (
+                  <img src={s.image} alt="" style={{ objectPosition: s.position }} />
+                ) : (
+                  s.video && <video src={`${s.video}#t=0.1`} muted playsInline preload="metadata" style={{ objectPosition: s.position }} />
+                )}
                 <span className="pos">{i + 1}</span>
               </Link>
               <div className="adm-slide-text">

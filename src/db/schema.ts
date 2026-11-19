@@ -48,6 +48,9 @@ export const products = pgTable("products", {
   description: text("description").notNull().default(""),
   price: money("price").notNull(),
   oldPrice: money("old_price"),
+  /** delivery price of this product inside Tbilisi and to the rest of the country (0 = free) */
+  deliveryTbilisi: money("delivery_tbilisi").notNull().default(15),
+  deliveryRegions: money("delivery_regions").notNull().default(15),
   categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
   /** image URLs: R2 public URL or "/media/<uuid>" for uploads, "/img/..." for bundled files; first = main */
   images: jsonb("images").$type<string[]>().notNull().default([]),
@@ -63,8 +66,8 @@ export type TitleLine = { text: string; offer?: string };
 
 export const heroSlides = pgTable("hero_slides", {
   id: serial("id").primaryKey(),
-  /** photo; for a video slide it is the poster shown while the video loads and when motion is reduced */
-  image: text("image").notNull(),
+  /** photo; on a video slide it is the optional poster shown while the video loads and when motion is reduced */
+  image: text("image"),
   /** optional background video (R2 URL, MP4 or WebM) */
   video: text("video"),
   align: text("align").$type<"left" | "center" | "right">().notNull().default("right"),

@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { FaCalendarCheck, FaCheckCircle, FaShieldAlt, FaTimesCircle, FaTruck } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle } from "react-icons/fa";
 import BuyBox from "@/components/BuyBox";
 import ProductCarousel from "@/components/ProductCarousel";
 import ProductGallery from "@/components/ProductGallery";
-import { categoryHref, delivery, discountPercent, formatPrice, productKey, telHref } from "@/lib/data";
+import { categoryHref, discountPercent, formatPrice, productKey, telHref } from "@/lib/data";
 import { getCategories, getProductBySlug, getProducts, getSiteSettings } from "@/lib/queries";
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
@@ -96,21 +96,6 @@ async function Product({ params }: { params: PageProps<"/product/[slug]">["param
               {product.description && <p className="product-desc">{product.description}</p>}
 
               {inStock && <BuyBox id={productKey(product)} name={product.name} />}
-
-              <ul className="product-perks">
-                <li>
-                  <FaTruck />
-                  <span>მიწოდება 1-3 დღეში, {delivery.freeFrom} ₾-დან უფასოდ</span>
-                </li>
-                <li>
-                  <FaShieldAlt />
-                  <span>ოფიციალური გარანტია</span>
-                </li>
-                <li>
-                  <FaCalendarCheck />
-                  <span>შესაძლებელია განვადებით</span>
-                </li>
-              </ul>
 
               {phone && (
                 <p className="product-help">

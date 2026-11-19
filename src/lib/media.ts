@@ -37,7 +37,7 @@ async function referencedFiles(): Promise<Set<string>> {
   const { rows } = await db.execute<{ u: string }>(sql`
     select jsonb_array_elements_text(images) as u from products
     union select image from categories where image is not null
-    union select image from hero_slides
+    union select image from hero_slides where image is not null
     union select video from hero_slides where video is not null
     union select image from order_items where image is not null`);
   return new Set(rows.map((r) => fileId(r.u)).filter((id): id is string => Boolean(id)));

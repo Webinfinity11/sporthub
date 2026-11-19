@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { FaAngleLeft, FaAngleRight } from "react-icons/fa";
 import ProductCard from "./ProductCard";
 import type { Product } from "@/lib/data";
@@ -8,7 +8,8 @@ import type { Product } from "@/lib/data";
 function usePerView() {
   const [n, setN] = useState(4);
   useEffect(() => {
-    const update = () => setN(window.innerWidth >= 992 ? 4 : window.innerWidth >= 600 ? 2 : 1);
+    // phones show two cards, same as the product grids
+    const update = () => setN(window.innerWidth >= 992 ? 4 : window.innerWidth >= 768 ? 3 : 2);
     update();
     window.addEventListener("resize", update);
     return () => window.removeEventListener("resize", update);
@@ -33,6 +34,7 @@ export default function ProductCarousel({
   const [animate, setAnimate] = useState(true);
 
   const [paused, setPaused] = useState(false);
+  const touchX = useRef<number | null>(null);
   // Bumped on manual navigation so the autoplay timer restarts from zero.
   const [tick, setTick] = useState(0);
 
@@ -93,6 +95,17 @@ export default function ProductCarousel({
           onMouseLeave={() => setPaused(false)}
           onFocus={() => setPaused(true)}
           onBlur={() => setPaused(false)}
+          onTouchStart={(e) => {
+            touchX.current = e.touches[0].clientX;
+            setPaused(true);
+          }}
+          onTouchEnd={(e) => {
+            setPaused(false);
+            if (touchX.current === null || !scrollable) return;
+            const dx = e.changedTouches[0].clientX - touchX.current;
+            touchX.current = null;
+            if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+          }}
         >
           <div className="owl-stage-outer">
             <div

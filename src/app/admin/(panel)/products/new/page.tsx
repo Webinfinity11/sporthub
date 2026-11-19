@@ -22,6 +22,8 @@ export default async function NewProductPage() {
         slug: "",
         description: "",
         price: null,
+        deliveryTbilisi: null,
+        deliveryRegions: null,
         oldPrice: null,
         stock: 0,
         categoryId: null,

@@ -107,7 +107,7 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
             {s.secondaryLabel && <span className="pv-btn ghost">{s.secondaryLabel}</span>}
           </div>
         </div>
-        {!image && <p className="pv-empty">ატვირთეთ ფოტო გადახედვისთვის</p>}
+        {!image && !video && <p className="pv-empty">ატვირთეთ ფოტო ან ვიდეო გადახედვისთვის</p>}
       </section>
 
       <div className="adm-edit-grid">
@@ -208,7 +208,7 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
               onChange={(u) => setImage(u[0] ?? "")}
             />
             <FieldError msg={f.image} />
-            <p className="adm-hint">ვიდეოიან სლაიდზე ეს ფოტო ჩანს ვიდეოს ჩატვირთვამდე.</p>
+            <p className="adm-hint">თუ ვიდეოს ატვირთავთ, ფოტო არასავალდებულოა. ასეთ შემთხვევაში ის ჩანს ვიდეოს ჩატვირთვამდე.</p>
             <div className="adm-field">
               <label htmlFor="position">ფოტოს ფოკუსი</label>
               <select id="position" name="position" value={s.position} onChange={(e) => set("position", e.target.value)}>
@@ -228,7 +228,7 @@ export default function SlideForm({ slide, links }: { slide: SlideData; links: {
             </div>
             <VideoUploader name="video" initial={slide.video} onChange={setVideo} />
             <FieldError msg={f.video} />
-            <p className="adm-hint">არასავალდებულოა. ვიდეო ხმის გარეშე ტრიალებს ფოტოს ნაცვლად.</p>
+            <p className="adm-hint">ვიდეო ხმის გარეშე ტრიალებს ფოტოს ნაცვლად. ფოტო ან ვიდეო, ერთ-ერთი მაინც საჭიროა.</p>
           </section>
 
           <section className="adm-panel">

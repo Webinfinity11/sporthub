@@ -5,12 +5,13 @@ import Link from "next/link";
 import { FaShoppingBag, FaTimes } from "react-icons/fa";
 import { QtyStepper } from "./BuyBox";
 import { useStore } from "./Store";
-import { delivery, deliveryCost, formatPrice, productHref } from "@/lib/data";
+import { deliveryCost, formatPrice, productHref } from "@/lib/data";
+
+const shipText = (n: number) => (n === 0 ? "უფასო" : formatPrice(n));
 
 export function OrderSummary({ children }: { children?: React.ReactNode }) {
-  const { cartSubtotal, cartCount } = useStore();
-  const ship = deliveryCost(cartSubtotal);
-  const left = delivery.freeFrom - cartSubtotal;
+  const { cart, cartSubtotal, cartCount } = useStore();
+  const items = cart.map((l) => l.product);
   return (
     <aside className="order-summary">
       <h2>შეკვეთის ჯამი</h2>
@@ -20,15 +21,19 @@ export function OrderSummary({ children }: { children?: React.ReactNode }) {
           <dd>{formatPrice(cartSubtotal)}</dd>
         </div>
         <div>
-          <dt>მიწოდება</dt>
-          <dd>{ship === 0 ? "უფასო" : formatPrice(ship)}</dd>
+          <dt>მიწოდება თბილისში</dt>
+          <dd>{shipText(deliveryCost(items, "tbilisi"))}</dd>
+        </div>
+        <div>
+          <dt>მიწოდება რეგიონებში</dt>
+          <dd>{shipText(deliveryCost(items, "regions"))}</dd>
         </div>
         <div className="total">
-          <dt>სულ</dt>
-          <dd>{formatPrice(cartSubtotal + ship)}</dd>
+          <dt>სულ, მიწოდების გარეშე</dt>
+          <dd>{formatPrice(cartSubtotal)}</dd>
         </div>
       </dl>
-      {ship > 0 && left > 0 && <p className="free-hint">დაამატეთ {formatPrice(left)} და მიწოდება უფასო იქნება.</p>}
+      <p className="free-hint">მიწოდების ფასი დაემატება შეკვეთის გაფორმებისას, ქალაქის არჩევის შემდეგ.</p>
       {children}
     </aside>
   );

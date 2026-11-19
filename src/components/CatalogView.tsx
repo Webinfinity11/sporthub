@@ -5,7 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { FaAngleDown, FaAngleLeft, FaAngleRight, FaSlidersH, FaTimes } from "react-icons/fa";
 import ProductCard from "./ProductCard";
-import { discountPercent, type CategoryNode, type Product } from "@/lib/data";
+import { discountPercent, matchesSearch, searchTerms, type CategoryNode, type Product } from "@/lib/data";
 
 const PER_PAGE = 20;
 
@@ -131,7 +131,8 @@ export default function CatalogView({ products, tree }: { products: Product[]; t
     .split(",")
     .filter((s) => allSlugs.includes(s));
   const sale = params.get("sale") === "1";
-  const q = (params.get("q") ?? "").trim().toLowerCase();
+  const q = (params.get("q") ?? "").trim();
+  const terms = searchTerms(q);
   const sortParam = params.get("sort") ?? "";
   const sort = SORTS.some((s) => s.id === sortParam) ? sortParam : "";
   const minP = Math.max(PRICE_MIN, Number(params.get("min")) || PRICE_MIN);
@@ -173,7 +174,7 @@ export default function CatalogView({ products, tree }: { products: Product[]; t
         (!sale || discountPercent(p) > 0) &&
         p.price >= minP &&
         p.price <= maxP &&
-        (!q || p.name.toLowerCase().includes(q)),
+        matchesSearch(p, terms),
     )
     .sort((a, b) => {
       if (sort === "price-asc") return a.price - b.price;

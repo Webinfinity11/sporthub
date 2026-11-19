@@ -14,12 +14,11 @@ import {
   FaShoppingBag,
   FaTag,
   FaTimes,
-  FaTruck,
   FaUniversity,
 } from "react-icons/fa";
 import { useStore } from "./Store";
 import { checkPromo, placeOrder, type OrderState } from "@/app/(shop)/checkout/actions";
-import { delivery, deliveryCost, formatPrice, paymentMethods, promoDiscount, telHref, type PaymentMethod } from "@/lib/data";
+import { delivery, deliveryCost, formatPrice, paymentMethods, promoDiscount, telHref, zoneOf, type PaymentMethod } from "@/lib/data";
 import { useSiteSettings } from "./SiteSettings";
 
 const payIcons: Record<PaymentMethod, React.ComponentType> = {
@@ -80,12 +79,13 @@ function Field({
 
 type Promo = { code: string; percent: number } | null;
 
-function Summary({ variant, promo }: { variant: "mobile" | "panel"; promo: Promo }) {
+function Summary({ variant, promo, city }: { variant: "mobile" | "panel"; promo: Promo; city: string }) {
   const { cart, cartSubtotal, cartCount } = useStore();
-  const ship = deliveryCost(cartSubtotal);
+  const zone = zoneOf(city);
+  // no city yet: delivery is not known, the total shows the products only
+  const ship = zone ? deliveryCost(cart.map((l) => l.product), zone) : null;
   const discount = promo ? promoDiscount(cartSubtotal, promo.percent) : 0;
-  const total = cartSubtotal - discount + ship;
-  const left = delivery.freeFrom - cartSubtotal;
+  const total = cartSubtotal - discount + (ship ?? 0);
 
   const body = (
     <>
@@ -117,19 +117,14 @@ function Summary({ variant, promo }: { variant: "mobile" | "panel"; promo: Promo
           </div>
         )}
         <div>
-          <dt>მიწოდება</dt>
-          <dd>{ship === 0 ? <span className="free">უფასო</span> : formatPrice(ship)}</dd>
+          <dt>მიწოდება{zone && <> ({zone === "tbilisi" ? "თბილისი" : "რეგიონები"})</>}</dt>
+          <dd>{ship === null ? <span className="muted">აირჩიეთ ქალაქი</span> : ship === 0 ? <span className="free">უფასო</span> : formatPrice(ship)}</dd>
         </div>
         <div className="co-grand">
           <dt>სულ გადასახდელი</dt>
           <dd>{formatPrice(total)}</dd>
         </div>
       </dl>
-      {ship > 0 && left > 0 && (
-        <p className="co-free-hint">
-          <FaTruck /> კიდევ {formatPrice(left)} და მიწოდება უფასოა
-        </p>
-      )}
       <Link href="/cart" className="co-edit">
         კალათის რედაქტირება
       </Link>
@@ -211,6 +206,7 @@ export default function CheckoutView() {
   const [state, action, pending] = useActionState<OrderState, FormData>(placeOrder, { status: "idle" });
   const errors = state.status === "error" ? state.fields : {};
   const [promo, setPromo] = useState<Promo>(null);
+  const [city, setCity] = useState("");
   const [promoInput, setPromoInput] = useState("");
   const [promoError, setPromoError] = useState("");
   const [checking, startCheck] = useTransition();
@@ -262,7 +258,7 @@ export default function CheckoutView() {
             <Steps current={2} />
             <h1 className="co-title">შეკვეთის გაფორმება</h1>
 
-            <Summary variant="mobile" promo={promo} />
+            <Summary variant="mobile" promo={promo} city={city} />
 
             {state.status === "error" && (
               <p className="co-alert" role="alert">
@@ -298,7 +294,7 @@ export default function CheckoutView() {
               <h2>მიწოდების მისამართი</h2>
               <div className="co-row co-row-city">
                 <Field id="city" label="ქალაქი" error={errors.city}>
-                  <select id="city" name="city" defaultValue="" required {...aria("city")}>
+                  <select id="city" name="city" value={city} onChange={(e) => setCity(e.target.value)} required {...aria("city")}>
                     <option value="" disabled>
                       აირჩიეთ ქალაქი
                     </option>
@@ -407,7 +403,7 @@ export default function CheckoutView() {
           </div>
 
           <aside className="co-aside" aria-label="შეკვეთის ჯამი">
-            <Summary variant="panel" promo={promo} />
+            <Summary variant="panel" promo={promo} city={city} />
           </aside>
         </form>
       </div>

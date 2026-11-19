@@ -29,6 +29,20 @@
       "when": 1795083756406,
       "tag": "0003_hero_video",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1795086217270,
+      "tag": "0004_product_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1795089897638,
+      "tag": "0005_slide_image_optional",
+      "breakpoints": true
     }
   ]
 }

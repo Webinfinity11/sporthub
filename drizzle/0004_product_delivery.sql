@@ -1,0 +1,2 @@
+ALTER TABLE "products" ADD COLUMN "delivery_tbilisi" numeric(10, 2) DEFAULT 15 NOT NULL;--> statement-breakpoint
+ALTER TABLE "products" ADD COLUMN "delivery_regions" numeric(10, 2) DEFAULT 15 NOT NULL;

@@ -32,6 +32,8 @@ export default async function EditProductPage({ params, searchParams }: PageProp
         slug: p.slug,
         description: p.description,
         price: p.price,
+        deliveryTbilisi: p.deliveryTbilisi,
+        deliveryRegions: p.deliveryRegions,
         oldPrice: p.oldPrice,
         stock: p.stock,
         categoryId: p.categoryId,
