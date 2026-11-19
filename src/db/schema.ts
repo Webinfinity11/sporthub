@@ -19,7 +19,7 @@ const bytea = customType<{ data: Buffer }>({ dataType: () => "bytea" });
 // Money is stored as numeric(10,2) and read as a JS number.
 const money = (name: string) => numeric(name, { precision: 10, scale: 2, mode: "number" });
 
-/** Uploaded images (kept in Postgres so Railway needs no extra storage). Served at /media/:id */
+/** Legacy uploads kept in Postgres, served at /media/:id. New uploads go to Cloudflare R2 when it is configured (src/lib/storage.ts). */
 export const media = pgTable("media", {
   id: uuid("id").primaryKey().defaultRandom(),
   mime: text("mime").notNull(),
@@ -49,7 +49,7 @@ export const products = pgTable("products", {
   price: money("price").notNull(),
   oldPrice: money("old_price"),
   categoryId: integer("category_id").references(() => categories.id, { onDelete: "set null" }),
-  /** image URLs: "/media/<uuid>" for uploads or "/img/..." for bundled files; first = main */
+  /** image URLs: R2 public URL or "/media/<uuid>" for uploads, "/img/..." for bundled files; first = main */
   images: jsonb("images").$type<string[]>().notNull().default([]),
   specs: jsonb("specs").$type<Spec[]>().notNull().default([]),
   stock: integer("stock").notNull().default(0),

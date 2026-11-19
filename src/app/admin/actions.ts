@@ -9,6 +9,7 @@ import { checkCredentials, createSessionToken, requireAdmin, SESSION_COOKIE } fr
 import { normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
 import { TAGS } from "@/lib/queries";
 import { slugify } from "@/lib/slug";
+import { isImageUrl, putImage, r2Enabled } from "@/lib/storage";
 
 export type FormState = { ok?: boolean; error?: string; fields?: Record<string, string> } | null;
 
@@ -62,6 +63,14 @@ export async function uploadImage(form: FormData): Promise<{ url?: string; error
   if (!IMAGE_TYPES.includes(file.type)) return { error: "დაშვებულია JPG, PNG, WEBP, AVIF ან GIF" };
   if (file.size > MAX_IMAGE) return { error: "ფაილი 8 MB-ზე დიდია" };
   const data = Buffer.from(await file.arrayBuffer());
+  if (r2Enabled) {
+    try {
+      return { url: await putImage(new Uint8Array(data), file.type) };
+    } catch (e) {
+      console.error(e);
+      return { error: "ატვირთვა ვერ მოხერხდა, სცადეთ თავიდან" };
+    }
+  }
   const [row] = await db.insert(media).values({ mime: file.type, size: data.length, data }).returning({ id: media.id });
   return { url: `/media/${row.id}` };
 }
@@ -93,7 +102,7 @@ export async function saveProduct(_prev: FormState, form: FormData): Promise<For
   let images: string[] = [];
   let specs: [string, string][] = [];
   try {
-    images = (JSON.parse(str(form, "images") || "[]") as unknown[]).map(String).filter((u) => /^\/(media|img)\//.test(u));
+    images = (JSON.parse(str(form, "images") || "[]") as unknown[]).map(String).filter(isImageUrl);
     specs = (JSON.parse(str(form, "specs") || "[]") as unknown[])
       .filter((r): r is [string, string] => Array.isArray(r) && r.length === 2)
       .map(([k, v]) => [String(k).trim(), String(v).trim()] as [string, string])
@@ -262,7 +271,7 @@ export async function saveSlide(_prev: FormState, form: FormData): Promise<FormS
   const id = num(form, "id");
   const image = str(form, "image");
   const fields: Record<string, string> = {};
-  if (!/^\/(media|img)\//.test(image)) fields.image = "ატვირთეთ ფოტო";
+  if (!isImageUrl(image)) fields.image = "ატვირთეთ ფოტო";
   const line1 = str(form, "line1");
   const line2 = str(form, "line2");
   if (!line1) fields.line1 = "მიუთითეთ სათაური";

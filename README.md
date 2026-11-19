@@ -50,4 +50,13 @@ Migrations also run automatically on every `npm start` (Railway).
 
 The build does not need the database; storefront pages read it per request (cached, refreshed when the admin saves).
 
-Uploaded images are stored in Postgres and served from `/media/<id>`.
+Uploaded images go to Cloudflare R2 and are served from the bucket's public URL.
+Set these variables on Railway (and in `.env.local` to test locally):
+
+- `R2_ACCOUNT_ID` = Cloudflare account ID
+- `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` = an R2 API token with Object Read & Write on the bucket
+- `R2_BUCKET` = bucket name
+- `R2_PUBLIC_URL` = the bucket's public URL, e.g. `https://media.example.com` or `https://pub-xxxx.r2.dev`
+
+Without them uploads fall back to Postgres (`/media/<id>`). To move images already stored in Postgres to R2,
+run `npm run media:r2` with production `DATABASE_URL`, check the site, then `npm run media:r2 -- --delete`.
