@@ -4,11 +4,12 @@ import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { headers } from "next/headers";
 import { db, orderItems, orders, products, promoCodes } from "@/db";
-import { delivery, deliveryCost, normalizePromo, paymentMethods, PROMO_RE, promoDiscount, zoneOf } from "@/lib/data";
+import { deliveryCost, isDeliveryZone, normalizePromo, paymentMethods, PROMO_RE, promoDiscount, zoneLabel } from "@/lib/data";
 
 export type OrderState =
   | { status: "idle" }
-  | { status: "error"; message: string; fields: Record<string, string> }
+  /** `values`: what the customer typed, so the form can show it again (React resets the form after the action) */
+  | { status: "error"; message: string; fields: Record<string, string>; values: Record<string, string> }
   | { status: "ok"; orderNumber: string; total: number };
 
 export type PromoCheck = { ok: true; code: string; percent: number } | { ok: false; error: string };
@@ -46,10 +47,12 @@ class PromoGone extends Error {}
 export async function placeOrder(_prev: OrderState, form: FormData): Promise<OrderState> {
   const get = (k: string) => String(form.get(k) ?? "").trim();
   const fields: Record<string, string> = {};
+  const values = Object.fromEntries(["name", "phone", "email", "address", "comment", "payment"].map((k) => [k, get(k)]));
 
   const name = get("name").slice(0, 120);
   const phone = get("phone").replace(/[\s-]/g, "");
-  const city = get("city").slice(0, 60);
+  const zoneRaw = get("zone");
+  const email = get("email").slice(0, 160);
   const address = get("address").slice(0, 300);
   const comment = get("comment").slice(0, 1000);
   const payment = get("payment");
@@ -57,8 +60,9 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
 
   if (name.length < 2) fields.name = "მიუთითეთ სახელი და გვარი";
   if (!/^(\+?995)?5\d{8}$/.test(phone)) fields.phone = "მიუთითეთ სწორი მობილურის ნომერი (5XX XXX XXX)";
-  const zone = zoneOf(city);
-  if (!zone || !delivery.cities.includes(city)) fields.city = "აირჩიეთ ქალაქი";
+  const zone = isDeliveryZone(zoneRaw) ? zoneRaw : null;
+  if (!zone) fields.zone = "აირჩიეთ მიწოდების ზონა";
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "ელ-ფოსტა არასწორია";
   if (address.length < 5) fields.address = "მიუთითეთ მისამართი";
   if (!paymentMethods.some((m) => m.id === payment)) fields.payment = "აირჩიეთ გადახდის მეთოდი";
 
@@ -80,9 +84,9 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
     .map((w) => ({ product: rows.find((r) => r.id === w.id && r.active), qty: w.qty }))
     .filter((l): l is { product: (typeof rows)[number]; qty: number } => !!l.product);
 
-  if (lines.length === 0) return { status: "error", message: "კალათა ცარიელია ან პროდუქტები აღარ არის ხელმისაწვდომი", fields };
+  if (lines.length === 0) return { status: "error", message: "კალათა ცარიელია ან პროდუქტები აღარ არის ხელმისაწვდომი", fields, values };
   if (Object.keys(fields).length > 0) {
-    return { status: "error", message: "გთხოვთ, შეავსოთ მონიშნული ველები", fields };
+    return { status: "error", message: "გთხოვთ, შეავსოთ მონიშნული ველები", fields, values };
   }
 
   const subtotal = lines.reduce((s, l) => s + l.product.price * l.qty, 0);
@@ -114,7 +118,8 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
           number,
           name,
           phone: phone.replace(/^\+?995/, ""),
-          city,
+          email,
+          city: zoneLabel(zone!),
           address,
           comment,
           payment,
@@ -138,7 +143,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
     });
   } catch (e) {
     if (e instanceof PromoGone) {
-      return { status: "error", message: "პრომო კოდი აღარ მოქმედებს. წაშალეთ ის და სცადეთ თავიდან.", fields: { promo: "პრომო კოდი აღარ მოქმედებს" } };
+      return { status: "error", message: "პრომო კოდი აღარ მოქმედებს. წაშალეთ ის და სცადეთ თავიდან.", fields: { promo: "პრომო კოდი აღარ მოქმედებს" }, values };
     }
     throw e;
   }

@@ -9,7 +9,7 @@ import {
   FaPhoneAlt,
   FaTiktok,
 } from "react-icons/fa";
-import { categoryHref, siteInfo, telHref, type Category, type SiteSettings } from "@/lib/data";
+import { categoryHref, legalPages, siteInfo, telHref, type Category, type SiteSettings } from "@/lib/data";
 
 export default function Footer({ categories, settings }: { categories: Category[]; settings: SiteSettings }) {
   const socials = [
@@ -21,8 +21,8 @@ export default function Footer({ categories, settings }: { categories: Category[
     <>
       <footer className="footer-area">
         <div className="container">
-          <div className="row">
-            <div className="col-md-5 col-sm-12">
+          <div className="footer-grid">
+            <div className="footer-about">
               <div className="single-footer-widget">
                 <div className="footer-logo">
                   <Link href="/">
@@ -33,7 +33,7 @@ export default function Footer({ categories, settings }: { categories: Category[
               </div>
             </div>
 
-            <div className="col-md-3 col-sm-6">
+            <div>
               <div className="single-footer-widget">
                 <h3 className="title">კატეგორიები</h3>
                 <ul className="links">
@@ -46,7 +46,23 @@ export default function Footer({ categories, settings }: { categories: Category[
               </div>
             </div>
 
-            <div className="col-md-4 col-sm-6">
+            <div>
+              <div className="single-footer-widget">
+                <h3 className="title">ინფორმაცია</h3>
+                <ul className="links">
+                  {legalPages.map((p) => (
+                    <li key={p.href}>
+                      <Link href={p.href}>{p.label}</Link>
+                    </li>
+                  ))}
+                  <li>
+                    <Link href="/contact">კონტაქტი</Link>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div className="footer-contact">
               <div className="single-footer-widget">
                 <h3 className="title">კონტაქტი</h3>
                 <ul className="contact">

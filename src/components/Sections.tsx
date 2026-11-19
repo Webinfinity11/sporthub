@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
 import {
-  FaCalendarCheck,
+  FaUndoAlt,
   FaCaretRight,
   FaCreditCard,
   FaShieldAlt,
@@ -47,7 +47,7 @@ const benefitIcons = {
   truck: FaTruck,
   shield: FaShieldAlt,
   card: FaCreditCard,
-  installment: FaCalendarCheck,
+  return: FaUndoAlt,
 };
 
 export function WhyUs() {

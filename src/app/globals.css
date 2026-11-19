@@ -1839,6 +1839,26 @@ ul {
   transition: all 0.3s ease;
 }
 .buy-now:hover { background: var(--dark); color: #fff; }
+.product-ship {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  background: var(--card);
+  padding: 14px 18px;
+  margin: 0 0 18px;
+}
+.product-ship > svg { color: var(--primary); font-size: 20px; }
+.product-ship dl { margin: 0; display: flex; flex-wrap: wrap; gap: 4px 26px; }
+.product-ship dl div { display: flex; flex-direction: column; }
+.product-ship dt { color: var(--gray); font-size: 12px; line-height: 1.4; }
+.product-ship dd { margin: 0; color: var(--dark); font-weight: 800; font-size: 16px; line-height: 1.4; }
+.product-ship a { color: var(--primary); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.product-ship a:hover { text-decoration: underline; }
+@media (max-width: 575px) {
+  .product-ship { grid-template-columns: auto minmax(0, 1fr); padding: 12px 14px; }
+  .product-ship a { grid-column: 2; }
+}
 .product-help { color: var(--gray); font-size: 14px; margin: 0; }
 .product-help a { color: var(--primary); font-weight: 700; }
 
@@ -2007,7 +2027,11 @@ ul {
 .co-alert { background: #fef2f2; color: #b91c1c; border-radius: 4px; padding: 12px 14px; margin: 0 0 20px; font-size: 14px; }
 
 /* payment cards */
-.co-pay { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.co-pay { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.co-zones { margin-bottom: 16px; }
+.co-zones.has-error .co-pay-card { border-color: #dc2626; }
+.co-zone-price { float: right; color: var(--primary); font-weight: 800; }
+.co-agree { color: var(--gray); font-size: 13px; line-height: 1.5; text-align: center; margin: 12px 0 0 !important; display: block !important; }
 .co-pay-option { position: relative; cursor: pointer; }
 .co-pay-option input { position: absolute; opacity: 0; pointer-events: none; }
 .co-pay-card {
@@ -2184,6 +2208,15 @@ ul {
    FOOTER
    ========================================================= */
 .footer-area { background: var(--footer); padding: 50px 0 20px; }
+/* about | categories | information | contact */
+.footer-grid { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.95fr) minmax(0, 1.2fr) minmax(0, 1.15fr); gap: 0 32px; }
+@media (max-width: 991px) {
+  .footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 30px; }
+}
+@media (max-width: 575px) {
+  .footer-grid { grid-template-columns: minmax(0, 1fr); }
+  .single-footer-widget { margin-bottom: 26px; }
+}
 .single-footer-widget { margin-bottom: 30px; }
 .single-footer-widget .footer-logo { margin: 0 0 16px; }
 .single-footer-widget .footer-logo img { width: 200px; max-width: 100%; height: auto; }
@@ -2327,6 +2360,60 @@ ul {
 }
 
 /* =========================================================
+   LEGAL PAGE (terms)
+   ========================================================= */
+.legal-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 36px; }
+.legal-tabs a {
+  padding: 10px 18px;
+  border: 1px solid #cbd5e1;
+  color: var(--dark);
+  font-weight: 700;
+  font-size: 14px;
+  line-height: 1.3;
+  transition: border-color 0.2s ease, color 0.2s ease, background 0.2s ease;
+}
+.legal-tabs a:hover { border-color: var(--primary); color: var(--primary); }
+.legal-tabs a[aria-current="page"] { background: var(--primary); border-color: var(--primary); color: #fff; }
+.legal-body { max-width: 860px; color: #334155; font-size: 15px; line-height: 1.75; }
+.legal-body .legal-lead { font-size: 16px; color: var(--dark); padding: 20px 24px; background: var(--card); border-left: 4px solid var(--primary); margin: 0 0 8px; }
+.legal-body h2 {
+  color: var(--dark);
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.35;
+  margin: 40px 0 14px;
+  padding-bottom: 10px;
+  position: relative;
+}
+.legal-body > h2:first-child { margin-top: 0; }
+.legal-body h2::after { content: ""; position: absolute; left: 0; bottom: 0; width: 36px; height: 3px; background: var(--primary); }
+.legal-body p { margin: 0 0 14px; }
+.legal-body ul { margin: 0 0 16px; padding: 0; list-style: none; }
+.legal-body ul li { position: relative; padding-left: 22px; margin-bottom: 8px; }
+.legal-body ul li::before { content: ""; position: absolute; left: 4px; top: 11px; width: 7px; height: 7px; background: var(--primary); }
+.legal-body a { color: var(--primary); font-weight: 600; }
+.legal-body a:hover { color: var(--primary-dark); text-decoration: underline; }
+.legal-facts { margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.legal-facts > div { background: var(--card); padding: 14px 18px; }
+.legal-facts > div:nth-child(3) { grid-column: 1 / -1; }
+.legal-facts dt { color: var(--gray); font-size: 13px; line-height: 1.4; margin-bottom: 4px; }
+.legal-facts dd { margin: 0; color: var(--dark); font-weight: 700; line-height: 1.5; }
+.legal-terms { margin: 0; }
+.legal-terms > div { padding: 14px 0; border-bottom: 1px solid #e2e8f0; display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; }
+.legal-terms > div:first-child { padding-top: 4px; }
+.legal-terms dt { color: var(--dark); font-weight: 700; line-height: 1.6; }
+.legal-terms dd { margin: 0; }
+@media (max-width: 767px) {
+  .legal-tabs { gap: 6px; margin-bottom: 26px; }
+  .legal-tabs a { padding: 9px 12px; font-size: 13px; }
+  .legal-body { font-size: 14px; }
+  .legal-body .legal-lead { font-size: 15px; padding: 16px 18px; }
+  .legal-body h2 { font-size: 18px; margin-top: 32px; }
+  .legal-facts { grid-template-columns: 1fr; }
+  .legal-terms > div { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* =========================================================
    PHONES (up to 767px): compact layout
    ========================================================= */
 @media (max-width: 767px) {
@@ -2336,6 +2423,7 @@ ul {
   .section-title h1 { font-size: 22px; line-height: 28px; margin: 0; background: none; }
   .section-title h1 span { padding: 0; }
   .page-title { padding: 34px 0 30px; }
+  .page-title h1 { font-size: 26px; line-height: 1.25; overflow-wrap: anywhere; }
 
   /* hero: text block at the bottom of the photo instead of the scaled desktop grid */
   .rev_slider_wrapper { height: 460px; }

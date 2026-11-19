@@ -91,7 +91,7 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
                 <th>ნომერი</th>
                 <th>თარიღი</th>
                 <th>მყიდველი</th>
-                <th>ქალაქი</th>
+                <th>მიწოდება</th>
                 <th>გადახდა</th>
                 <th className="num">ჯამი</th>
                 <th>სტატუსი</th>

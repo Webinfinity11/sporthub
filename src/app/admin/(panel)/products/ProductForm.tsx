@@ -178,7 +178,7 @@ export default function ProductForm({ product, categories, saved }: { product: P
                 <FieldError msg={f.deliveryTbilisi} />
               </div>
               <div className="adm-field">
-                <label htmlFor="deliveryRegions">მიწოდება რეგიონებში, ₾</label>
+                <label htmlFor="deliveryRegions">მიწოდება თბილისის გარეთ, ₾</label>
                 <input
                   id="deliveryRegions"
                   name="deliveryRegions"

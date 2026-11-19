@@ -101,6 +101,14 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
                   <a href={`tel:+995${order.phone.replace(/\D/g, "")}`}>{fmtPhone(order.phone)}</a>
                 </dd>
               </div>
+              {order.email && (
+                <div>
+                  <dt>ელ-ფოსტა</dt>
+                  <dd>
+                    <a href={`mailto:${order.email}`}>{order.email}</a>
+                  </dd>
+                </div>
+              )}
               <div>
                 <dt>მისამართი</dt>
                 <dd>

@@ -3,11 +3,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { FaCheckCircle, FaTimesCircle } from "react-icons/fa";
+import { FaCheckCircle, FaTimesCircle, FaTruck } from "react-icons/fa";
 import BuyBox from "@/components/BuyBox";
 import ProductCarousel from "@/components/ProductCarousel";
 import ProductGallery from "@/components/ProductGallery";
-import { categoryHref, discountPercent, formatPrice, productKey, telHref } from "@/lib/data";
+import { categoryHref, discountPercent, formatPrice, productKey, shipText, telHref } from "@/lib/data";
 import { getCategories, getProductBySlug, getProducts, getSiteSettings } from "@/lib/queries";
 
 export async function generateMetadata({ params }: PageProps<"/product/[slug]">): Promise<Metadata> {
@@ -96,6 +96,21 @@ async function Product({ params }: { params: PageProps<"/product/[slug]">["param
               {product.description && <p className="product-desc">{product.description}</p>}
 
               {inStock && <BuyBox id={productKey(product)} name={product.name} />}
+
+              <div className="product-ship">
+                <FaTruck aria-hidden />
+                <dl>
+                  <div>
+                    <dt>მიწოდება თბილისში</dt>
+                    <dd>{shipText(product.deliveryTbilisi)}</dd>
+                  </div>
+                  <div>
+                    <dt>თბილისის გარეთ</dt>
+                    <dd>{shipText(product.deliveryRegions)}</dd>
+                  </div>
+                </dl>
+                <Link href="/delivery">მიწოდების პირობები</Link>
+              </div>
 
               {phone && (
                 <p className="product-help">

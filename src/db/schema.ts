@@ -120,6 +120,9 @@ export const orders = pgTable("orders", {
   status: orderStatus("status").notNull().default("new"),
   name: text("name").notNull(),
   phone: text("phone").notNull(),
+  /** optional, the customer may leave it empty */
+  email: text("email").notNull().default(""),
+  /** delivery zone label: "თბილისი" or "თბილისის გარეთ" */
   city: text("city").notNull(),
   address: text("address").notNull(),
   comment: text("comment").notNull().default(""),

@@ -5,9 +5,7 @@ import Link from "next/link";
 import { FaShoppingBag, FaTimes } from "react-icons/fa";
 import { QtyStepper } from "./BuyBox";
 import { useStore } from "./Store";
-import { deliveryCost, formatPrice, productHref } from "@/lib/data";
-
-const shipText = (n: number) => (n === 0 ? "უფასო" : formatPrice(n));
+import { deliveryCost, formatPrice, productHref, shipText } from "@/lib/data";
 
 export function OrderSummary({ children }: { children?: React.ReactNode }) {
   const { cart, cartSubtotal, cartCount } = useStore();
@@ -25,7 +23,7 @@ export function OrderSummary({ children }: { children?: React.ReactNode }) {
           <dd>{shipText(deliveryCost(items, "tbilisi"))}</dd>
         </div>
         <div>
-          <dt>მიწოდება რეგიონებში</dt>
+          <dt>მიწოდება თბილისის გარეთ</dt>
           <dd>{shipText(deliveryCost(items, "regions"))}</dd>
         </div>
         <div className="total">
@@ -33,7 +31,7 @@ export function OrderSummary({ children }: { children?: React.ReactNode }) {
           <dd>{formatPrice(cartSubtotal)}</dd>
         </div>
       </dl>
-      <p className="free-hint">მიწოდების ფასი დაემატება შეკვეთის გაფორმებისას, ქალაქის არჩევის შემდეგ.</p>
+      <p className="free-hint">მიწოდების ფასი დაემატება შეკვეთის გაფორმებისას, მიწოდების ზონის არჩევის შემდეგ.</p>
       {children}
     </aside>
   );

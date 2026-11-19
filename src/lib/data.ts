@@ -85,23 +85,34 @@ export type SiteSettings = {
 
 /** used until the admin saves the settings for the first time */
 export const defaultSiteSettings: SiteSettings = {
-  phones: ["+995 550 50 40 76"],
-  addresses: ["რუსთაველის გამზ. 12, თბილისი"],
-  email: "info@sporthub.ge",
+  phones: ["577 44 0110"],
+  addresses: ["საქართველო, ქალაქი თბილისი, ორხევის მიმდებარე ტერიტორია"],
+  email: "sporthub2027@gmail.com",
   hours: "ორშ-შაბ: 10:00-20:00",
   facebook: "",
   instagram: "",
   tiktok: "",
 };
 
-export const telHref = (phone: string) => `tel:${phone.replace(/[^\d+]/g, "")}`;
+/** The shop's legal documents: footer "information" column and the tabs above each document. */
+export const legalPages = [
+  { href: "/terms", label: "წესები და პირობები" },
+  { href: "/delivery", label: "მიწოდების პოლიტიკა" },
+  { href: "/privacy", label: "კონფიდენციალურობის პოლიტიკა" },
+] as const;
 
-// "Why shop with us" benefits (test copy)
+/** tel: link; a Georgian mobile written without the country code (5XX XX XX XX) gets +995 */
+export const telHref = (phone: string) => {
+  const n = phone.replace(/[^\d+]/g, "");
+  return `tel:${/^5\d{8}$/.test(n) ? `+995${n}` : n}`;
+};
+
+// "Why shop with us" benefits, worded after the terms and the delivery policy
 export const benefits = [
-  { icon: "truck", title: "სწრაფი მიწოდება", text: "მიწოდება მთელ საქართველოში 1-3 სამუშაო დღეში." },
-  { icon: "shield", title: "ოფიციალური გარანტია", text: "ტრენაჟორებზე 2 წლამდე გარანტია." },
-  { icon: "card", title: "უსაფრთხო გადახდა", text: "ბარათით ან საბანკო გადარიცხვით." },
-  { icon: "installment", title: "განვადება", text: "შესაძლებელია განვადებით შეძენა." },
+  { icon: "truck", title: "მიწოდება", text: "თბილისსა და შემოგარენში, შეკვეთის დამუშავებიდან 2-3 სამუშაო დღეში." },
+  { icon: "shield", title: "2 წლიანი გარანტია", text: "კანონისმიერი გარანტია საქონლის გადაცემიდან 2 წლის განმავლობაში." },
+  { icon: "card", title: "გადახდა", text: "ნაღდი ანგარიშსწორებით კურიერთან ან საბანკო გადარიცხვით." },
+  { icon: "return", title: "დაბრუნება 14 დღეში", text: "მიღებიდან 14 კალენდარული დღის განმავლობაში, მიზეზის მითითების გარეშე." },
 ] as const;
 
 const priceFormat = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
@@ -119,17 +130,19 @@ export const matchesSearch = (p: Pick<Product, "name">, terms: string[]) => {
 export const discountPercent = (p: Pick<Product, "price" | "oldPrice">) =>
   p.oldPrice && p.oldPrice > p.price ? Math.round((1 - p.price / p.oldPrice) * 100) : 0;
 
-// Checkout settings (test values)
-export const TBILISI = "თბილისი";
+/** Delivery zones of the delivery policy; each product has a price for each. */
+export const deliveryZones = [
+  { id: "tbilisi", label: "თბილისი", hint: "თბილისი და შემოგარენი" },
+  { id: "regions", label: "თბილისის გარეთ", hint: "მიწოდება წინასწარ თანხმდება ტელეფონით" },
+] as const;
 
-export const delivery = {
-  cities: [TBILISI, "ბათუმი", "ქუთაისი", "რუსთავი", "ზუგდიდი", "გორი", "თელავი", "სხვა"],
-};
+export type DeliveryZone = (typeof deliveryZones)[number]["id"];
 
-export type DeliveryZone = "tbilisi" | "regions";
+export const isDeliveryZone = (v: string): v is DeliveryZone => deliveryZones.some((z) => z.id === v);
+export const zoneLabel = (z: DeliveryZone) => deliveryZones.find((x) => x.id === z)!.label;
 
-/** Tbilisi has its own price, every other city pays the regional one. No city chosen yet = null. */
-export const zoneOf = (city: string): DeliveryZone | null => (!city ? null : city === TBILISI ? "tbilisi" : "regions");
+/** delivery price for display: 0 is free */
+export const shipText = (n: number) => (n === 0 ? "უფასო" : formatPrice(n));
 
 type Deliverable = Pick<Product, "deliveryTbilisi" | "deliveryRegions">;
 
@@ -137,10 +150,10 @@ type Deliverable = Pick<Product, "deliveryTbilisi" | "deliveryRegions">;
 export const deliveryCost = (items: Deliverable[], zone: DeliveryZone) =>
   Math.round(items.reduce((s, p) => s + (zone === "tbilisi" ? p.deliveryTbilisi : p.deliveryRegions), 0) * 100) / 100;
 
+// payment methods of the terms and conditions
 export const paymentMethods = [
-  { id: "cash", label: "ადგილზე გადახდა", hint: "ნაღდი ან ბარათი კურიერთან" },
+  { id: "cash", label: "ნაღდი ანგარიშსწორება", hint: "კურიერთან, საქონლის მიღებისას" },
   { id: "transfer", label: "საბანკო გადარიცხვა", hint: "რეკვიზიტებს გამოგიგზავნით" },
-  { id: "installment", label: "განვადება", hint: "დაგიკავშირდებით დეტალებისთვის" },
 ] as const;
 
 export type PaymentMethod = (typeof paymentMethods)[number]["id"];
@@ -161,5 +174,7 @@ export const orderStatuses = [
   { id: "cancelled", label: "გაუქმებული" },
 ] as const;
 
-export const paymentLabel = (id: string) => paymentMethods.find((m) => m.id === id)?.label ?? id;
+/** label of a stored payment method (older orders may have "installment") */
+export const paymentLabel = (id: string) =>
+  paymentMethods.find((m) => m.id === id)?.label ?? ({ installment: "განვადება" } as Record<string, string>)[id] ?? id;
 export const statusLabel = (id: string) => orderStatuses.find((s) => s.id === id)?.label ?? id;

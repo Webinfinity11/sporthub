@@ -6,25 +6,30 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import {
   FaAngleDown,
   FaAngleRight,
-  FaCalendarCheck,
   FaCheck,
   FaLock,
+  FaMapMarkerAlt,
   FaMoneyBillWave,
   FaPhoneAlt,
   FaShoppingBag,
   FaTag,
   FaTimes,
+  FaTruck,
   FaUniversity,
 } from "react-icons/fa";
 import { useStore } from "./Store";
 import { checkPromo, placeOrder, type OrderState } from "@/app/(shop)/checkout/actions";
-import { delivery, deliveryCost, formatPrice, paymentMethods, promoDiscount, telHref, zoneOf, type PaymentMethod } from "@/lib/data";
+import { deliveryCost, deliveryZones, formatPrice, paymentMethods, promoDiscount, shipText, telHref, zoneLabel, type DeliveryZone, type PaymentMethod } from "@/lib/data";
 import { useSiteSettings } from "./SiteSettings";
 
 const payIcons: Record<PaymentMethod, React.ComponentType> = {
   cash: FaMoneyBillWave,
   transfer: FaUniversity,
-  installment: FaCalendarCheck,
+};
+
+const zoneIcons: Record<DeliveryZone, React.ComponentType> = {
+  tbilisi: FaMapMarkerAlt,
+  regions: FaTruck,
 };
 
 function Steps({ current }: { current: 1 | 2 | 3 }) {
@@ -79,10 +84,9 @@ function Field({
 
 type Promo = { code: string; percent: number } | null;
 
-function Summary({ variant, promo, city }: { variant: "mobile" | "panel"; promo: Promo; city: string }) {
+function Summary({ variant, promo, zone }: { variant: "mobile" | "panel"; promo: Promo; zone: DeliveryZone | null }) {
   const { cart, cartSubtotal, cartCount } = useStore();
-  const zone = zoneOf(city);
-  // no city yet: delivery is not known, the total shows the products only
+  // no zone yet: delivery is not known, the total shows the products only
   const ship = zone ? deliveryCost(cart.map((l) => l.product), zone) : null;
   const discount = promo ? promoDiscount(cartSubtotal, promo.percent) : 0;
   const total = cartSubtotal - discount + (ship ?? 0);
@@ -117,8 +121,8 @@ function Summary({ variant, promo, city }: { variant: "mobile" | "panel"; promo:
           </div>
         )}
         <div>
-          <dt>მიწოდება{zone && <> ({zone === "tbilisi" ? "თბილისი" : "რეგიონები"})</>}</dt>
-          <dd>{ship === null ? <span className="muted">აირჩიეთ ქალაქი</span> : ship === 0 ? <span className="free">უფასო</span> : formatPrice(ship)}</dd>
+          <dt>მიწოდება{zone && <> ({zoneLabel(zone)})</>}</dt>
+          <dd>{ship === null ? <span className="muted">აირჩიეთ ზონა</span> : ship === 0 ? <span className="free">უფასო</span> : formatPrice(ship)}</dd>
         </div>
         <div className="co-grand">
           <dt>სულ გადასახდელი</dt>
@@ -177,7 +181,7 @@ function Done({ orderNumber, total }: { orderNumber: string; total: number }) {
             </li>
             <li>
               <strong>მიწოდება</strong>
-              <span>შეკვეთა მოგივათ 1-3 სამუშაო დღეში.</span>
+              <span>შეკვეთა დამუშავდება 2 სამუშაო დღეში და მოგივათ დამუშავებიდან 2-3 სამუშაო დღეში. დღესა და დროს ტელეფონით შეგითანხმებთ.</span>
             </li>
             <li>
               <strong>გადახდა</strong>
@@ -203,10 +207,13 @@ function Done({ orderNumber, total }: { orderNumber: string; total: number }) {
 export default function CheckoutView() {
   const phone = useSiteSettings().phones[0];
   const { cart, clearCart } = useStore();
+  const items = cart.map((l) => l.product);
   const [state, action, pending] = useActionState<OrderState, FormData>(placeOrder, { status: "idle" });
   const errors = state.status === "error" ? state.fields : {};
+  // typed values come back with an error, so the reset form keeps them
+  const typed: Record<string, string> = state.status === "error" ? state.values : {};
   const [promo, setPromo] = useState<Promo>(null);
-  const [city, setCity] = useState("");
+  const [zone, setZone] = useState<DeliveryZone | null>(null);
   const [promoInput, setPromoInput] = useState("");
   const [promoError, setPromoError] = useState("");
   const [checking, startCheck] = useTransition();
@@ -258,7 +265,7 @@ export default function CheckoutView() {
             <Steps current={2} />
             <h1 className="co-title">შეკვეთის გაფორმება</h1>
 
-            <Summary variant="mobile" promo={promo} city={city} />
+            <Summary variant="mobile" promo={promo} zone={zone} />
 
             {state.status === "error" && (
               <p className="co-alert" role="alert">
@@ -270,7 +277,7 @@ export default function CheckoutView() {
               <h2>საკონტაქტო ინფორმაცია</h2>
               <div className="co-row">
                 <Field id="name" label="სახელი და გვარი" error={errors.name}>
-                  <input id="name" name="name" autoComplete="name" required {...aria("name")} />
+                  <input id="name" name="name" autoComplete="name" defaultValue={typed.name} required {...aria("name")} />
                 </Field>
                 <Field id="phone" label="მობილური" error={errors.phone}>
                   <div className="co-prefix">
@@ -282,33 +289,55 @@ export default function CheckoutView() {
                       inputMode="tel"
                       autoComplete="tel-national"
                       placeholder="5XX XXX XXX"
+                      defaultValue={typed.phone}
                       required
                       {...aria("phone")}
                     />
                   </div>
                 </Field>
               </div>
+              <Field id="email" label="ელ-ფოსტა" error={errors.email} optional>
+                <input id="email" name="email" type="email" autoComplete="email" inputMode="email" defaultValue={typed.email} {...aria("email")} />
+              </Field>
             </div>
 
             <div className="co-section">
-              <h2>მიწოდების მისამართი</h2>
-              <div className="co-row co-row-city">
-                <Field id="city" label="ქალაქი" error={errors.city}>
-                  <select id="city" name="city" value={city} onChange={(e) => setCity(e.target.value)} required {...aria("city")}>
-                    <option value="" disabled>
-                      აირჩიეთ ქალაქი
-                    </option>
-                    {delivery.cities.map((c) => (
-                      <option key={c}>{c}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field id="address" label="ქუჩა, სახლი, ბინა" error={errors.address}>
-                  <input id="address" name="address" autoComplete="street-address" required {...aria("address")} />
-                </Field>
+              <h2>მიწოდება</h2>
+              <div className={`co-pay co-zones${errors.zone ? " has-error" : ""}`} role="radiogroup" aria-label="მიწოდების ზონა">
+                {deliveryZones.map((z) => {
+                  const Icon = zoneIcons[z.id];
+                  return (
+                    <label key={z.id} className="co-pay-option">
+                      {/* uncontrolled: after React resets the form on an error, it falls back to the chosen zone */}
+                      <input type="radio" name="zone" value={z.id} defaultChecked={zone === z.id} onChange={() => setZone(z.id)} required />
+                      <span className="co-pay-card">
+                        <span className="co-pay-icon" aria-hidden>
+                          <Icon />
+                        </span>
+                        <strong>
+                          {z.label}
+                          <span className="co-zone-price">{shipText(deliveryCost(items, z.id))}</span>
+                        </strong>
+                        <small>{z.hint}</small>
+                      </span>
+                    </label>
+                  );
+                })}
               </div>
+              {errors.zone && <p className="co-error">{errors.zone}</p>}
+              <Field id="address" label="მისამართი" error={errors.address}>
+                <input
+                  id="address"
+                  name="address"
+                  autoComplete="street-address"
+                  placeholder={zone === "regions" ? "ქალაქი ან სოფელი, ქუჩა, სახლი" : "ქუჩა, სახლი, ბინა"}
+                  defaultValue={typed.address}
+                  required
+                  {...aria("address")}
+                />
+              </Field>
               <Field id="comment" label="კომენტარი კურიერისთვის" optional>
-                <textarea id="comment" name="comment" rows={2} placeholder="მაგ. სადარბაზოს კოდი" />
+                <textarea id="comment" name="comment" rows={2} placeholder="მაგ. სადარბაზოს კოდი" defaultValue={typed.comment} />
               </Field>
             </div>
 
@@ -319,7 +348,7 @@ export default function CheckoutView() {
                   const Icon = payIcons[m.id];
                   return (
                     <label key={m.id} className="co-pay-option">
-                      <input type="radio" name="payment" value={m.id} defaultChecked={i === 0} />
+                      <input type="radio" name="payment" value={m.id} defaultChecked={typed.payment ? typed.payment === m.id : i === 0} />
                       <span className="co-pay-card">
                         <span className="co-pay-icon" aria-hidden>
                           <Icon />
@@ -391,6 +420,10 @@ export default function CheckoutView() {
               <button type="submit" className="thm-btn" disabled={pending}>
                 {pending ? "იგზავნება..." : "შეკვეთის დადასტურება"}
               </button>
+              <p className="co-agree">
+                შეკვეთის დადასტურებით ეთანხმებით <Link href="/terms">წესებსა და პირობებს</Link> და{" "}
+                <Link href="/privacy">კონფიდენციალურობის პოლიტიკას</Link>.
+              </p>
               <p>
                 <FaLock aria-hidden /> გადახდა ხდება შეკვეთის დადასტურების შემდეგ.
                 {phone && (
@@ -403,7 +436,7 @@ export default function CheckoutView() {
           </div>
 
           <aside className="co-aside" aria-label="შეკვეთის ჯამი">
-            <Summary variant="panel" promo={promo} city={city} />
+            <Summary variant="panel" promo={promo} zone={zone} />
           </aside>
         </form>
       </div>
