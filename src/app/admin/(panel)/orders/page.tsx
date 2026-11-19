@@ -5,7 +5,7 @@ import { FaSearch } from "react-icons/fa";
 import { db, orders, type OrderStatus } from "@/db";
 import { fmtDate, fmtPhone } from "@/lib/admin-format";
 import { requireAdmin } from "@/lib/auth";
-import { formatPrice, orderStatuses, paymentLabel, statusLabel } from "@/lib/data";
+import { formatPrice, orderStatuses, paymentLabel, paymentStates, statusLabel } from "@/lib/data";
 
 export const instant = false;
 
@@ -111,7 +111,10 @@ export default async function OrdersPage({ searchParams }: PageProps<"/admin/ord
                     <span className="adm-cell-sub">{fmtPhone(o.phone)}</span>
                   </td>
                   <td>{o.city}</td>
-                  <td className="adm-muted">{paymentLabel(o.payment)}</td>
+                  <td className="adm-muted">
+                    {paymentLabel(o.payment)}
+                    {o.paymentStatus && <span className={`adm-pay p-${o.paymentStatus}`}>{paymentStates[o.paymentStatus] ?? o.paymentStatus}</span>}
+                  </td>
                   <td className="num">{formatPrice(o.total)}</td>
                   <td>
                     <span className={`adm-status s-${o.status}`}>{statusLabel(o.status)}</span>

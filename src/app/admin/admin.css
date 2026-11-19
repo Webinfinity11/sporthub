@@ -295,6 +295,13 @@ a.adm-kpi:hover { border-color: #cbd5e1; }
 .s-delivered { --st: #15803d; --st-bg: #f0fdf4; }
 .s-cancelled { --st: #6b7280; --st-bg: #f3f4f6; }
 .adm-status { color: var(--st); background: var(--st-bg); }
+/* card payment state next to the payment method */
+.adm-pay { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 20px; color: #475569; background: #f1f5f9; }
+.adm-pay.p-paid { color: #15803d; background: #dcfce7; }
+.adm-pay.p-failed { color: #b91c1c; background: #fee2e2; }
+.adm-pay.p-pending { color: #b45309; background: #fef3c7; }
+.adm-pay.p-awaiting { color: #fff; background: #2563eb; }
+.adm-mono { font-family: ui-monospace, Consolas, monospace; font-size: 12px; word-break: break-all; }
 
 /*  */
 .adm-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-bottom: 16px; }

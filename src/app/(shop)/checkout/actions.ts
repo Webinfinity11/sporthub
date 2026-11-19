@@ -3,14 +3,23 @@
 import { and, eq, gt, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
+import { after } from "next/server";
 import { db, orderItems, orders, products, promoCodes } from "@/db";
-import { deliveryCost, isDeliveryZone, normalizePromo, paymentMethods, PROMO_RE, promoDiscount, zoneLabel } from "@/lib/data";
+import { deliveryCost, isDeliveryZone, normalizePromo, paymentLabel, paymentMethods, PROMO_RE, promoDiscount, zoneLabel } from "@/lib/data";
+import { bogEnabled, createBogOrder } from "@/lib/bog";
+import { sendOrderEmails } from "@/lib/order-emails";
+import { siteOrigin } from "@/lib/payments";
+import { createInstallment, tbcEnabled } from "@/lib/tbc";
+import { getSiteSettings } from "@/lib/queries";
 
 export type OrderState =
   | { status: "idle" }
   /** `values`: what the customer typed, so the form can show it again (React resets the form after the action) */
   | { status: "error"; message: string; fields: Record<string, string>; values: Record<string, string> }
-  | { status: "ok"; orderNumber: string; total: number };
+  | { status: "ok"; orderNumber: string; total: number }
+  /** card payment: the buyer goes to the bank's payment page */
+  | { status: "redirect"; url: string };
 
 export type PromoCheck = { ok: true; code: string; percent: number } | { ok: false; error: string };
 
@@ -64,7 +73,8 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   if (!zone) fields.zone = "აირჩიეთ მიწოდების ზონა";
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "ელ-ფოსტა არასწორია";
   if (address.length < 5) fields.address = "მიუთითეთ მისამართი";
-  if (!paymentMethods.some((m) => m.id === payment)) fields.payment = "აირჩიეთ გადახდის მეთოდი";
+  const offline = (payment === "card" && !bogEnabled) || (payment === "installment" && !tbcEnabled);
+  if (!paymentMethods.some((m) => m.id === payment) || offline) fields.payment = "აირჩიეთ გადახდის მეთოდი";
 
   let raw: unknown = [];
   try {
@@ -98,6 +108,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   const number = `SH-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 10)}`;
   let discount = 0;
   let total = subtotal + ship;
+  let orderId = 0;
 
   try {
     await db.transaction(async (tx) => {
@@ -123,6 +134,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
           address,
           comment,
           payment,
+          paymentStatus: payment === "card" || payment === "installment" ? "pending" : "",
           subtotal,
           delivery: ship,
           promoCode: promo || null,
@@ -130,6 +142,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
           total,
         })
         .returning({ id: orders.id });
+      orderId = order.id;
       await tx.insert(orderItems).values(
         lines.map((l) => ({
           orderId: order.id,
@@ -149,5 +162,97 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   }
   updateTag("orders");
 
+  // links in emails and bank redirects: SITE_URL (the public domain) or the address of this request
+  const origin = siteOrigin(await headers());
+
+  // card: the order waits for the bank; emails go out when the payment is confirmed (lib/payments.ts)
+  if (payment === "card") {
+    try {
+      const bog = await createBogOrder({
+        number,
+        items: lines.map((l) => ({ productId: l.product.id, name: l.product.name, qty: l.qty, price: l.product.price, image: l.product.images[0] ?? null })),
+        discount,
+        delivery: ship,
+        total,
+        origin,
+        buyer: { name, phone: phone.replace(/^\+?995/, ""), email: email || undefined },
+      });
+      await db.update(orders).set({ bogOrderId: bog.id }).where(eq(orders.id, orderId));
+      return { status: "redirect", url: bog.redirect };
+    } catch (e) {
+      console.error(e);
+      await db.update(orders).set({ paymentStatus: "failed" }).where(eq(orders.id, orderId));
+      return {
+        status: "error",
+        message: "ბარათით გადახდა ახლა ვერ მოხერხდა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.",
+        fields: { payment: "ბარათით გადახდა დროებით მიუწვდომელია" },
+        values,
+      };
+    }
+  }
+
+  // installment: the buyer applies on TBC's page; the order waits for the bank's decision
+  if (payment === "installment") {
+    try {
+      const app = await createInstallment({
+        number,
+        items: lines.map((l) => ({ name: l.product.name, qty: l.qty, price: l.product.price })),
+        discount,
+        delivery: ship,
+      });
+      await db.update(orders).set({ tbcSessionId: app.sessionId }).where(eq(orders.id, orderId));
+      return { status: "redirect", url: app.redirect };
+    } catch (e) {
+      console.error(e);
+      await db.update(orders).set({ paymentStatus: "failed" }).where(eq(orders.id, orderId));
+      return {
+        status: "error",
+        message: "განვადების განაცხადი ახლა ვერ შეიქმნა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.",
+        fields: { payment: "განვადება დროებით მიუწვდომელია" },
+        values,
+      };
+    }
+  }
+
+  // emails go out after the response, so the buyer does not wait for the mail server
+  const mail = {
+    id: orderId,
+    number,
+    name,
+    phone: phone.replace(/^\+?995/, ""),
+    email,
+    zone: zoneLabel(zone!),
+    address,
+    comment,
+    payment: paymentLabel(payment),
+    items: lines.map((l) => ({ name: l.product.name, qty: l.qty, price: l.product.price, image: l.product.images[0] ?? null })),
+    subtotal,
+    discount,
+    promoCode: promo || null,
+    delivery: ship,
+    total,
+  };
+  after(async () => sendOrderEmails(origin, mail, await getSiteSettings()));
+
   return { status: "ok", orderNumber: number, total };
+}
+
+/** "Pay again" on the result page: a new bank payment for an order whose card payment failed. */
+export async function retryCardPayment(number: string) {
+  const [o] = await db.select().from(orders).where(eq(orders.number, number)).limit(1);
+  // only after a failed attempt: a pending one may still complete, and a second payment would charge twice
+  if (!o || o.payment !== "card" || o.paymentStatus !== "failed" || !bogEnabled) redirect(`/checkout/result?order=${encodeURIComponent(number)}`);
+  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
+  const bog = await createBogOrder({
+    number: o.number,
+    items: items.map((i) => ({ productId: i.productId ?? i.id, name: i.name, qty: i.qty, price: i.price, image: i.image })),
+    discount: o.discount,
+    delivery: o.delivery,
+    total: o.total,
+    origin: siteOrigin(await headers()),
+    buyer: { name: o.name, phone: o.phone, email: o.email || undefined },
+  });
+  await db.update(orders).set({ bogOrderId: bog.id, paymentStatus: "pending", updatedAt: new Date() }).where(eq(orders.id, o.id));
+  updateTag("orders");
+  redirect(bog.redirect);
 }

@@ -189,7 +189,7 @@ export default function ProductForm({ product, categories, saved }: { product: P
                 <FieldError msg={f.deliveryRegions} />
               </div>
             </div>
-            <p className="adm-hint">0 ნიშნავს უფასო მიწოდებას. კალათაში თითო პროდუქტის მიწოდება ერთხელ ემატება.</p>
+            <p className="adm-hint">0 ნიშნავს უფასო მიწოდებას. რამდენიმე პროდუქტის შეკვეთისას მიწოდების ფასად მათ შორის ყველაზე მაღალი აიღება.</p>
             <div className="adm-field">
               <label htmlFor="stock">მარაგი, ცალი</label>
               <input id="stock" name="stock" type="number" min={0} defaultValue={product.stock} aria-invalid={f.stock ? true : undefined} />

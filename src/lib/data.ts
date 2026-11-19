@@ -110,7 +110,7 @@ export const telHref = (phone: string) => {
 // "Why shop with us" benefits, worded after the terms and the delivery policy
 export const benefits = [
   { icon: "truck", title: "მიწოდება", text: "თბილისსა და შემოგარენში, შეკვეთის დამუშავებიდან 2-3 სამუშაო დღეში." },
-  { icon: "shield", title: "2 წლიანი გარანტია", text: "კანონისმიერი გარანტია საქონლის გადაცემიდან 2 წლის განმავლობაში." },
+  { icon: "shield", title: "1 წლიანი გარანტია", text: "ტრენაჟორებზე 1 წლიანი გარანტია." },
   { icon: "card", title: "გადახდა", text: "ნაღდი ანგარიშსწორებით კურიერთან ან საბანკო გადარიცხვით." },
   { icon: "return", title: "დაბრუნება 14 დღეში", text: "მიღებიდან 14 კალენდარული დღის განმავლობაში, მიზეზის მითითების გარეშე." },
 ] as const;
@@ -146,14 +146,19 @@ export const shipText = (n: number) => (n === 0 ? "უფასო" : formatPric
 
 type Deliverable = Pick<Product, "deliveryTbilisi" | "deliveryRegions">;
 
-/** Delivery of an order: each product's price for the zone, added up once per product (quantity does not change it). */
+/**
+ * Delivery of an order: the highest delivery price among its products for the zone
+ * (everything travels together, so the largest item sets the price). Quantity does not change it.
+ */
 export const deliveryCost = (items: Deliverable[], zone: DeliveryZone) =>
-  Math.round(items.reduce((s, p) => s + (zone === "tbilisi" ? p.deliveryTbilisi : p.deliveryRegions), 0) * 100) / 100;
+  items.reduce((max, p) => Math.max(max, zone === "tbilisi" ? p.deliveryTbilisi : p.deliveryRegions), 0);
 
 // payment methods of the terms and conditions
 export const paymentMethods = [
+  { id: "card", label: "ბარათით ონლაინ", hint: "საქართველოს ბანკის გადახდის გვერდზე" },
   { id: "cash", label: "ნაღდი ანგარიშსწორება", hint: "კურიერთან, საქონლის მიღებისას" },
   { id: "transfer", label: "საბანკო გადარიცხვა", hint: "რეკვიზიტებს გამოგიგზავნით" },
+  { id: "installment", label: "განვადება TBC ბანკით", hint: "განაცხადი TBC ბანკის გვერდზე" },
 ] as const;
 
 export type PaymentMethod = (typeof paymentMethods)[number]["id"];
@@ -174,7 +179,16 @@ export const orderStatuses = [
   { id: "cancelled", label: "გაუქმებული" },
 ] as const;
 
+/** card payment state (orders.payment_status) */
+export const paymentStates: Record<string, string> = {
+  pending: "მოლოდინში",
+  awaiting: "ელოდება თქვენს დადასტურებას",
+  paid: "გადახდილია",
+  failed: "ვერ შესრულდა",
+  refunded: "დაბრუნებულია",
+};
+
 /** label of a stored payment method (older orders may have "installment") */
 export const paymentLabel = (id: string) =>
-  paymentMethods.find((m) => m.id === id)?.label ?? ({ installment: "განვადება" } as Record<string, string>)[id] ?? id;
+  paymentMethods.find((m) => m.id === id)?.label ?? id;
 export const statusLabel = (id: string) => orderStatuses.find((s) => s.id === id)?.label ?? id;

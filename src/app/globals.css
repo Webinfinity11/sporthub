@@ -2028,7 +2028,11 @@ ul {
 
 /* payment cards */
 .co-pay { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.co-pay:not(.co-zones) { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
 .co-zones { margin-bottom: 16px; }
+.co-result-fail .co-done-icon { background: #dc2626; }
+.co-result-wait .co-done-icon { background: var(--gray); }
+.co-done-card form { display: inline-block; margin: 0; }
 .co-zones.has-error .co-pay-card { border-color: #dc2626; }
 .co-zone-price { float: right; color: var(--primary); font-weight: 800; }
 .co-agree { color: var(--gray); font-size: 13px; line-height: 1.5; text-align: center; margin: 12px 0 0 !important; display: block !important; }

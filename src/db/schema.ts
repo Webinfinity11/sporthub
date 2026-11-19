@@ -127,6 +127,15 @@ export const orders = pgTable("orders", {
   address: text("address").notNull(),
   comment: text("comment").notNull().default(""),
   payment: text("payment").notNull(),
+  /** card payments only: "pending" | "paid" | "failed" | "refunded"; empty for cash and transfer */
+  paymentStatus: text("payment_status").notNull().default(""),
+  /** the bank's order id for a card payment (Bank of Georgia) */
+  bogOrderId: text("bog_order_id"),
+  /** TBC installment application session */
+  tbcSessionId: text("tbc_session_id"),
+  /** last status text from the bank, shown in the admin */
+  paymentDetail: text("payment_detail").notNull().default(""),
+  paidAt: timestamp("paid_at", { withTimezone: true }),
   subtotal: money("subtotal").notNull(),
   delivery: money("delivery").notNull(),
   /** promo code discount (already subtracted from total) */

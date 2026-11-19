@@ -1,7 +1,7 @@
 "use server";
 
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
-import { updateTag } from "next/cache";
+import { refresh, updateTag } from "next/cache";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
@@ -11,6 +11,8 @@ import { normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
 import { TAGS } from "@/lib/queries";
 import { slugify } from "@/lib/slug";
 import { optimizeImage, releaseMedia, sweepOrphans } from "@/lib/media";
+import { siteOrigin, syncBogPayment, syncInstallment } from "@/lib/payments";
+import { cancelInstallment, confirmInstallment } from "@/lib/tbc";
 import { isImageUrl, isVideoUrl, newKey, presignPut, publicUrl, putObject, r2Enabled } from "@/lib/storage";
 
 export type FormState = { ok?: boolean; error?: string; fields?: Record<string, string> } | null;
@@ -491,3 +493,33 @@ export async function deletePromo(id: number) {
   await db.delete(promoCodes).where(eq(promoCodes.id, id));
   redirect("/admin/promo");
 }
+
+/** Online payment of an order: re-check with the bank, or confirm / cancel a TBC installment. */
+export async function bankAction(id: number, what: "refresh" | "confirm" | "cancel"): Promise<{ message?: string; error?: string }> {
+  await requireAdmin();
+  const [o] = await db
+    .select({ payment: orders.payment, bogOrderId: orders.bogOrderId, tbcSessionId: orders.tbcSessionId })
+    .from(orders)
+    .where(eq(orders.id, id))
+    .limit(1);
+  if (!o) return { error: "შეკვეთა ვერ მოიძებნა" };
+  const origin = siteOrigin(await headers());
+  try {
+    if (o.payment === "card" && o.bogOrderId) {
+      await syncBogPayment(o.bogOrderId, origin);
+    } else if (o.payment === "installment" && o.tbcSessionId) {
+      if (what === "confirm") await confirmInstallment(o.tbcSessionId);
+      if (what === "cancel") await cancelInstallment(o.tbcSessionId);
+      await syncInstallment(id, origin);
+    } else {
+      return { error: "ამ შეკვეთას ონლაინ გადახდა არ აქვს" };
+    }
+  } catch (e) {
+    console.error("bankAction", id, what, e);
+    return { error: "ბანკმა მოთხოვნა ვერ შეასრულა. სცადეთ ცოტა ხანში." };
+  }
+  updateTag("orders");
+  refresh();
+  return { message: what === "confirm" ? "დადასტურებულია" : what === "cancel" ? "გაუქმებულია" : "განახლდა" };
+}
+

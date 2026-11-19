@@ -6,7 +6,9 @@ import { useActionState, useEffect, useState, useTransition } from "react";
 import {
   FaAngleDown,
   FaAngleRight,
+  FaCalendarCheck,
   FaCheck,
+  FaCreditCard,
   FaLock,
   FaMapMarkerAlt,
   FaMoneyBillWave,
@@ -23,8 +25,10 @@ import { deliveryCost, deliveryZones, formatPrice, paymentMethods, promoDiscount
 import { useSiteSettings } from "./SiteSettings";
 
 const payIcons: Record<PaymentMethod, React.ComponentType> = {
+  card: FaCreditCard,
   cash: FaMoneyBillWave,
   transfer: FaUniversity,
+  installment: FaCalendarCheck,
 };
 
 const zoneIcons: Record<DeliveryZone, React.ComponentType> = {
@@ -204,7 +208,8 @@ function Done({ orderNumber, total }: { orderNumber: string; total: number }) {
   );
 }
 
-export default function CheckoutView() {
+/** Online methods show only when their bank credentials are set: card (Bank of Georgia), installment (TBC). */
+export default function CheckoutView({ cardEnabled = false, installmentEnabled = false }: { cardEnabled?: boolean; installmentEnabled?: boolean }) {
   const phone = useSiteSettings().phones[0];
   const { cart, clearCart } = useStore();
   const items = cart.map((l) => l.product);
@@ -229,11 +234,30 @@ export default function CheckoutView() {
     });
   };
 
+  const methods = paymentMethods.filter((m) => (m.id !== "card" || cardEnabled) && (m.id !== "installment" || installmentEnabled));
+
   useEffect(() => {
     if (state.status === "ok") clearCart();
+    // card: off to the bank; the cart is cleared on the result page once the payment is confirmed
+    if (state.status === "redirect") window.location.assign(state.url);
   }, [state, clearCart]);
 
   if (state.status === "ok") return <Done orderNumber={state.orderNumber} total={state.total} />;
+  if (state.status === "redirect") {
+    return (
+      <section className="catalog section-padding">
+        <div className="container">
+          <div className="catalog-empty">
+            <FaCreditCard className="empty-icon" />
+            <h2>გადამისამართება ბანკის გვერდზე...</h2>
+            <p>
+              თუ გვერდი არ გაიხსნა, <a href={state.url}>დააჭირეთ აქ</a>.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   if (cart.length === 0) {
     return (
@@ -344,7 +368,7 @@ export default function CheckoutView() {
             <div className="co-section">
               <h2>გადახდა</h2>
               <div className="co-pay" role="radiogroup" aria-label="გადახდის მეთოდი">
-                {paymentMethods.map((m, i) => {
+                {methods.map((m, i) => {
                   const Icon = payIcons[m.id];
                   return (
                     <label key={m.id} className="co-pay-option">

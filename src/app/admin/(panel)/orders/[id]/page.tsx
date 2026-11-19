@@ -7,7 +7,8 @@ import { FaArrowLeft, FaPhoneAlt } from "react-icons/fa";
 import { db, orderItems, orders } from "@/db";
 import { fmtDate, fmtPhone } from "@/lib/admin-format";
 import { requireAdmin } from "@/lib/auth";
-import { formatPrice, paymentLabel } from "@/lib/data";
+import { formatPrice, paymentLabel, paymentStates } from "@/lib/data";
+import BankPanel from "./BankPanel";
 import OrderControls from "./OrderControls";
 
 export const instant = false;
@@ -117,7 +118,10 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
               </div>
               <div>
                 <dt>გადახდა</dt>
-                <dd>{paymentLabel(order.payment)}</dd>
+                <dd>
+                  {paymentLabel(order.payment)}
+                  {order.paymentStatus && <span className={`adm-pay p-${order.paymentStatus}`}>{paymentStates[order.paymentStatus] ?? order.paymentStatus}</span>}
+                </dd>
               </div>
               {order.comment && (
                 <div>
@@ -127,6 +131,15 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
               )}
             </dl>
           </section>
+          {(order.payment === "card" || order.payment === "installment") && (
+            <BankPanel
+              id={order.id}
+              payment={order.payment}
+              state={order.paymentStatus}
+              detail={order.paymentDetail}
+              reference={order.payment === "card" ? order.bogOrderId : order.tbcSessionId}
+            />
+          )}
         </div>
 
         <OrderControls id={order.id} status={order.status} note={order.adminNote} updatedAt={fmtDate(order.updatedAt)} />
