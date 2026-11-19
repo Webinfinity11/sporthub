@@ -131,13 +131,13 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
               )}
             </dl>
           </section>
-          {(order.payment === "card" || order.payment === "installment") && (
+          {(order.payment === "card" || order.payment === "installment" || order.payment === "split") && (
             <BankPanel
               id={order.id}
               payment={order.payment}
               state={order.paymentStatus}
               detail={order.paymentDetail}
-              reference={order.payment === "card" ? order.bogOrderId : order.tbcSessionId}
+              reference={order.payment === "card" ? order.bogOrderId : order.payment === "split" ? order.flittOrderId : order.tbcSessionId}
             />
           )}
         </div>

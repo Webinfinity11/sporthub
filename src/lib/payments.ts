@@ -3,6 +3,7 @@ import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { updateTag } from "next/cache";
 import { db, orderItems, orders } from "@/db";
 import { getBogReceipt, paymentStateOf } from "./bog";
+import { flittStateOf, getFlittStatus } from "./flitt";
 import { installmentStateOf, installmentStatus, tbcEnabled } from "./tbc";
 import { paymentLabel } from "./data";
 import { sendOrderEmails, type OrderMail } from "./order-emails";
@@ -49,6 +50,25 @@ export async function syncBogPayment(bogOrderId: string, origin: string) {
     .update(orders)
     .set({ paymentStatus: state, ...(state === "paid" ? { paidAt: new Date() } : {}), updatedAt: new Date() })
     .where(and(eq(orders.bogOrderId, bogOrderId), ne(orders.paymentStatus, state)))
+    .returning({ id: orders.id });
+  if (changed) {
+    updateTag("orders");
+    if (state === "paid") {
+      const mail = await orderMail(changed.id);
+      if (mail) await sendOrderEmails(origin, mail, await getSiteSettings());
+    }
+  }
+  return state;
+}
+
+/** Same as syncBogPayment, for a Flitt split payment (looked up by its Flitt order id). */
+export async function syncFlittPayment(flittOrderId: string, origin: string) {
+  const st = await getFlittStatus(flittOrderId);
+  const state = flittStateOf(st.status);
+  const [changed] = await db
+    .update(orders)
+    .set({ paymentStatus: state, paymentDetail: st.status, ...(state === "paid" ? { paidAt: new Date() } : {}), updatedAt: new Date() })
+    .where(and(eq(orders.flittOrderId, flittOrderId), ne(orders.paymentStatus, state)))
     .returning({ id: orders.id });
   if (changed) {
     updateTag("orders");

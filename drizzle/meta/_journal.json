@@ -64,6 +64,13 @@
       "when": 1795100773049,
       "tag": "0008_tbc_installments",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1795101396032,
+      "tag": "0009_flitt_split",
+      "breakpoints": true
     }
   ]
 }

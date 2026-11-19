@@ -131,6 +131,8 @@ export const orders = pgTable("orders", {
   paymentStatus: text("payment_status").notNull().default(""),
   /** the bank's order id for a card payment (Bank of Georgia) */
   bogOrderId: text("bog_order_id"),
+  /** Flitt order id of the latest split-payment attempt ("sporthub-<number>-<attempt>") */
+  flittOrderId: text("flitt_order_id"),
   /** TBC installment application session */
   tbcSessionId: text("tbc_session_id"),
   /** last status text from the bank, shown in the admin */

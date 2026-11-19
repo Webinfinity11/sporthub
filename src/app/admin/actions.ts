@@ -11,7 +11,7 @@ import { normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
 import { TAGS } from "@/lib/queries";
 import { slugify } from "@/lib/slug";
 import { optimizeImage, releaseMedia, sweepOrphans } from "@/lib/media";
-import { siteOrigin, syncBogPayment, syncInstallment } from "@/lib/payments";
+import { siteOrigin, syncBogPayment, syncFlittPayment, syncInstallment } from "@/lib/payments";
 import { cancelInstallment, confirmInstallment } from "@/lib/tbc";
 import { isImageUrl, isVideoUrl, newKey, presignPut, publicUrl, putObject, r2Enabled } from "@/lib/storage";
 
@@ -498,7 +498,7 @@ export async function deletePromo(id: number) {
 export async function bankAction(id: number, what: "refresh" | "confirm" | "cancel"): Promise<{ message?: string; error?: string }> {
   await requireAdmin();
   const [o] = await db
-    .select({ payment: orders.payment, bogOrderId: orders.bogOrderId, tbcSessionId: orders.tbcSessionId })
+    .select({ payment: orders.payment, bogOrderId: orders.bogOrderId, tbcSessionId: orders.tbcSessionId, flittOrderId: orders.flittOrderId })
     .from(orders)
     .where(eq(orders.id, id))
     .limit(1);
@@ -507,6 +507,8 @@ export async function bankAction(id: number, what: "refresh" | "confirm" | "canc
   try {
     if (o.payment === "card" && o.bogOrderId) {
       await syncBogPayment(o.bogOrderId, origin);
+    } else if (o.payment === "split" && o.flittOrderId) {
+      await syncFlittPayment(o.flittOrderId, origin);
     } else if (o.payment === "installment" && o.tbcSessionId) {
       if (what === "confirm") await confirmInstallment(o.tbcSessionId);
       if (what === "cancel") await cancelInstallment(o.tbcSessionId);

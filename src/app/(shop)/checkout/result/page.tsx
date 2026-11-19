@@ -8,7 +8,8 @@ import ClearCart from "@/components/ClearCart";
 import { db, orders } from "@/db";
 import { bogEnabled } from "@/lib/bog";
 import { formatPrice, telHref } from "@/lib/data";
-import { siteOrigin, syncBogPayment, syncInstallment } from "@/lib/payments";
+import { flittEnabled } from "@/lib/flitt";
+import { siteOrigin, syncBogPayment, syncFlittPayment, syncInstallment } from "@/lib/payments";
 import { getSiteSettings } from "@/lib/queries";
 import { tbcEnabled } from "@/lib/tbc";
 import { retryCardPayment } from "../actions";
@@ -37,6 +38,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
           state: orders.paymentStatus,
           bogOrderId: orders.bogOrderId,
           tbcSessionId: orders.tbcSessionId,
+          flittOrderId: orders.flittOrderId,
         })
         .from(orders)
         .where(eq(orders.number, number))
@@ -45,7 +47,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
   const settings = await getSiteSettings();
   const phone = settings.phones[0];
 
-  if (!order || (order.payment !== "card" && order.payment !== "installment")) {
+  if (!order || !["card", "installment", "split"].includes(order.payment)) {
     return (
       <Card icon={<FaTimes />} tone="fail" title="შეკვეთა ვერ მოიძებნა">
         <p>შეამოწმეთ ბმული ან დაგვიკავშირდით.</p>
@@ -59,6 +61,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
   const origin = siteOrigin(await headers());
   try {
     if (order.payment === "card" && state === "pending" && order.bogOrderId && bogEnabled) state = await syncBogPayment(order.bogOrderId, origin);
+    if (order.payment === "split" && state === "pending" && order.flittOrderId && flittEnabled) state = await syncFlittPayment(order.flittOrderId, origin);
     if (order.payment === "installment" && (state === "pending" || state === "awaiting") && order.tbcSessionId && tbcEnabled)
       state = (await syncInstallment(order.id, origin)) ?? state;
   } catch (e) {

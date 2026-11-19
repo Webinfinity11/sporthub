@@ -8,6 +8,7 @@ import {
   FaAngleRight,
   FaCalendarCheck,
   FaCheck,
+  FaChartPie,
   FaCreditCard,
   FaLock,
   FaMapMarkerAlt,
@@ -29,6 +30,7 @@ const payIcons: Record<PaymentMethod, React.ComponentType> = {
   cash: FaMoneyBillWave,
   transfer: FaUniversity,
   installment: FaCalendarCheck,
+  split: FaChartPie,
 };
 
 const zoneIcons: Record<DeliveryZone, React.ComponentType> = {
@@ -208,8 +210,16 @@ function Done({ orderNumber, total }: { orderNumber: string; total: number }) {
   );
 }
 
-/** Online methods show only when their bank credentials are set: card (Bank of Georgia), installment (TBC). */
-export default function CheckoutView({ cardEnabled = false, installmentEnabled = false }: { cardEnabled?: boolean; installmentEnabled?: boolean }) {
+/** Online methods show only when their credentials are set: card (Bank of Georgia), installment (TBC), split (Flitt). */
+export default function CheckoutView({
+  cardEnabled = false,
+  installmentEnabled = false,
+  splitEnabled = false,
+}: {
+  cardEnabled?: boolean;
+  installmentEnabled?: boolean;
+  splitEnabled?: boolean;
+}) {
   const phone = useSiteSettings().phones[0];
   const { cart, clearCart } = useStore();
   const items = cart.map((l) => l.product);
@@ -234,7 +244,8 @@ export default function CheckoutView({ cardEnabled = false, installmentEnabled =
     });
   };
 
-  const methods = paymentMethods.filter((m) => (m.id !== "card" || cardEnabled) && (m.id !== "installment" || installmentEnabled));
+  const enabled: Record<string, boolean> = { card: cardEnabled, installment: installmentEnabled, split: splitEnabled };
+  const methods = paymentMethods.filter((m) => enabled[m.id] ?? true);
 
   useEffect(() => {
     if (state.status === "ok") clearCart();

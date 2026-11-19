@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import CheckoutView from "@/components/CheckoutView";
 import { bogEnabled } from "@/lib/bog";
+import { flittEnabled } from "@/lib/flitt";
 import { tbcEnabled } from "@/lib/tbc";
 
 export const metadata: Metadata = { title: "შეკვეთის გაფორმება" };
 
 // Focused checkout: no big page banner, the form starts right under the header.
 export default function CheckoutPage() {
-  return <CheckoutView cardEnabled={bogEnabled} installmentEnabled={tbcEnabled} />;
+  return <CheckoutView cardEnabled={bogEnabled} installmentEnabled={tbcEnabled} splitEnabled={flittEnabled} />;
 }

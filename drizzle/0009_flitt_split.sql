@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "flitt_order_id" text;

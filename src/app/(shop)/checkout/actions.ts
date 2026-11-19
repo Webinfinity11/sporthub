@@ -10,6 +10,7 @@ import { deliveryCost, isDeliveryZone, normalizePromo, paymentLabel, paymentMeth
 import { bogEnabled, createBogOrder } from "@/lib/bog";
 import { sendOrderEmails } from "@/lib/order-emails";
 import { siteOrigin } from "@/lib/payments";
+import { createFlittCheckout, flittEnabled, flittOrderId } from "@/lib/flitt";
 import { createInstallment, tbcEnabled } from "@/lib/tbc";
 import { getSiteSettings } from "@/lib/queries";
 
@@ -73,7 +74,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   if (!zone) fields.zone = "აირჩიეთ მიწოდების ზონა";
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "ელ-ფოსტა არასწორია";
   if (address.length < 5) fields.address = "მიუთითეთ მისამართი";
-  const offline = (payment === "card" && !bogEnabled) || (payment === "installment" && !tbcEnabled);
+  const offline = (payment === "card" && !bogEnabled) || (payment === "installment" && !tbcEnabled) || (payment === "split" && !flittEnabled);
   if (!paymentMethods.some((m) => m.id === payment) || offline) fields.payment = "აირჩიეთ გადახდის მეთოდი";
 
   let raw: unknown = [];
@@ -134,7 +135,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
           address,
           comment,
           payment,
-          paymentStatus: payment === "card" || payment === "installment" ? "pending" : "",
+          paymentStatus: ["card", "installment", "split"].includes(payment) ? "pending" : "",
           subtotal,
           delivery: ship,
           promoCode: promo || null,
@@ -191,6 +192,25 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
     }
   }
 
+  // split (Flitt): the buyer pays in 4 parts on Flitt's page; emails go out once approved
+  if (payment === "split") {
+    try {
+      const fid = flittOrderId(number);
+      const f = await createFlittCheckout({ flittOrderId: fid, number, total, origin, email });
+      await db.update(orders).set({ flittOrderId: fid }).where(eq(orders.id, orderId));
+      return { status: "redirect", url: f.url };
+    } catch (e) {
+      console.error(e);
+      await db.update(orders).set({ paymentStatus: "failed" }).where(eq(orders.id, orderId));
+      return {
+        status: "error",
+        message: "განაწილება ახლა ვერ გაფორმდა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.",
+        fields: { payment: "განაწილება დროებით მიუწვდომელია" },
+        values,
+      };
+    }
+  }
+
   // installment: the buyer applies on TBC's page; the order waits for the bank's decision
   if (payment === "installment") {
     try {
@@ -237,11 +257,21 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   return { status: "ok", orderNumber: number, total };
 }
 
-/** "Pay again" on the result page: a new bank payment for an order whose card payment failed. */
+/** "Pay again" on the result page: a new card or split payment for an order whose last attempt failed. */
 export async function retryCardPayment(number: string) {
   const [o] = await db.select().from(orders).where(eq(orders.number, number)).limit(1);
+  const back = `/checkout/result?order=${encodeURIComponent(number)}`;
   // only after a failed attempt: a pending one may still complete, and a second payment would charge twice
-  if (!o || o.payment !== "card" || o.paymentStatus !== "failed" || !bogEnabled) redirect(`/checkout/result?order=${encodeURIComponent(number)}`);
+  if (!o || o.paymentStatus !== "failed") redirect(back);
+  const origin = siteOrigin(await headers());
+  if (o.payment === "split" && flittEnabled) {
+    const fid = flittOrderId(o.number);
+    const f = await createFlittCheckout({ flittOrderId: fid, number: o.number, total: o.total, origin, email: o.email });
+    await db.update(orders).set({ flittOrderId: fid, paymentStatus: "pending", updatedAt: new Date() }).where(eq(orders.id, o.id));
+    updateTag("orders");
+    redirect(f.url);
+  }
+  if (o.payment !== "card" || !bogEnabled) redirect(back);
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
   const bog = await createBogOrder({
     number: o.number,
@@ -249,7 +279,7 @@ export async function retryCardPayment(number: string) {
     discount: o.discount,
     delivery: o.delivery,
     total: o.total,
-    origin: siteOrigin(await headers()),
+    origin,
     buyer: { name: o.name, phone: o.phone, email: o.email || undefined },
   });
   await db.update(orders).set({ bogOrderId: bog.id, paymentStatus: "pending", updatedAt: new Date() }).where(eq(orders.id, o.id));

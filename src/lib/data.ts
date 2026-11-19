@@ -159,6 +159,7 @@ export const paymentMethods = [
   { id: "cash", label: "ნაღდი ანგარიშსწორება", hint: "კურიერთან, საქონლის მიღებისას" },
   { id: "transfer", label: "საბანკო გადარიცხვა", hint: "რეკვიზიტებს გამოგიგზავნით" },
   { id: "installment", label: "განვადება TBC ბანკით", hint: "განაცხადი TBC ბანკის გვერდზე" },
+  { id: "split", label: "განაწილება 4 ნაწილად", hint: "TBC ბანკი, Flitt-ის გვერდზე" },
 ] as const;
 
 export type PaymentMethod = (typeof paymentMethods)[number]["id"];

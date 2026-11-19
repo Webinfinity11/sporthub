@@ -8,6 +8,8 @@ import type { Slide } from "@/lib/data";
 const GRID_W = 1170;
 const GRID_H = 700;
 const DELAY = 9000;
+/** how much of the section below stays visible under the hero on a laptop screen */
+const PEEK = 120;
 
 // Vertical offsets (px on the 1170x700 grid) per slide alignment,
 // taken from the original Revolution Slider layer settings.
@@ -87,9 +89,20 @@ export default function HeroSlider({ slides }: { slides: Slide[] }) {
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setScale(Math.min(1, el.offsetWidth / GRID_W)));
+    // fit the width and the window height (minus the header and a peek of the next section),
+    // so on a laptop the visitor sees that the page continues below
+    const fit = () => {
+      const header = (document.querySelector(".header") as HTMLElement | null)?.offsetHeight ?? 80;
+      const room = window.innerHeight - header - PEEK;
+      setScale(Math.max(0.3, Math.min(1, el.offsetWidth / GRID_W, room / GRID_H)));
+    };
+    const ro = new ResizeObserver(fit);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
   }, []);
 
   return (
