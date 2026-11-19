@@ -13,8 +13,9 @@ const production = process.env.TBC_ENV === "production";
 export const tbcEnabled = Boolean(apiKey && apiSecret);
 
 const BASE = production ? "https://api.tbcbank.ge" : "https://test-api.tbcbank.ge";
-const MERCHANT_KEY = process.env.TBC_MERCHANT_KEY || (production ? "" : "000000000-ce21da5e-da92-48f3-8009-4d438cbcc137");
-const CAMPAIGN_ID = process.env.TBC_CAMPAIGN_ID || (production ? "" : "204");
+// the shop's own merchantKey / campaignId only work on the live API; the test API takes the public test pair
+const MERCHANT_KEY = production ? (process.env.TBC_MERCHANT_KEY ?? "") : "000000000-ce21da5e-da92-48f3-8009-4d438cbcc137";
+const CAMPAIGN_ID = production ? (process.env.TBC_CAMPAIGN_ID ?? "") : "204";
 
 type Res = { status: number; headers: Record<string, string | string[] | undefined>; body: string };
 
@@ -23,7 +24,12 @@ function call(method: string, path: string, headers: Record<string, string>, bod
   return new Promise((resolve, reject) => {
     const req = httpsRequest(
       `${BASE}${path}`,
-      { method, headers: { ...headers, ...(body ? { "Content-Length": Buffer.byteLength(body).toString() } : {}) }, timeout: 20000 },
+      {
+        method,
+        // every request carries the developer app key in an "apikey" header (developers.tbcbank.ge, Getting API Key and Secret)
+        headers: { apikey: apiKey ?? "", ...headers, ...(body ? { "Content-Length": Buffer.byteLength(body).toString() } : {}) },
+        timeout: 20000,
+      },
       (res) => {
         let data = "";
         res.setEncoding("utf8");
