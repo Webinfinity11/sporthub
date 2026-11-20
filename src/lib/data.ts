@@ -155,7 +155,7 @@ export const deliveryCost = (items: Deliverable[], zone: DeliveryZone) =>
 
 // payment methods of the terms and conditions
 export const paymentMethods = [
-  { id: "card", label: "ბარათით ონლაინ", hint: "საქართველოს ბანკის გადახდის გვერდზე" },
+  { id: "card", label: "საქართველოს ბანკი", hint: "ბარათით გადახდა ბანკის გვერდზე" },
   { id: "cash", label: "ნაღდი ანგარიშსწორება", hint: "კურიერთან, საქონლის მიღებისას" },
   { id: "transfer", label: "საბანკო გადარიცხვა", hint: "რეკვიზიტებს გამოგიგზავნით" },
   { id: "installment", label: "განვადება TBC ბანკით", hint: "განაცხადი TBC ბანკის გვერდზე" },

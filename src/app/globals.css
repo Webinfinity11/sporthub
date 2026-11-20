@@ -2094,6 +2094,7 @@ ul {
 .co-pay-option input:focus-visible + .co-pay-card { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25); }
 .co-pay-icon { color: var(--gray); font-size: 20px; margin-bottom: 6px; transition: color 0.15s ease; }
 .co-pay-option input:checked + .co-pay-card .co-pay-icon { color: var(--primary); }
+.co-pay-logo { display: block; width: 29px; height: 24px; object-fit: contain; }
 .co-pay-card strong { color: var(--dark); font-size: 14px; }
 .co-pay-card small { color: var(--gray); font-size: 12px; line-height: 17px; }
 

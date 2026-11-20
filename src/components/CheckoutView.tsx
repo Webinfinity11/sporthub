@@ -386,7 +386,11 @@ export default function CheckoutView({
                       <input type="radio" name="payment" value={m.id} defaultChecked={typed.payment ? typed.payment === m.id : i === 0} />
                       <span className="co-pay-card">
                         <span className="co-pay-icon" aria-hidden>
-                          <Icon />
+                          {m.id === "card" ? (
+                            <img src="/brand/bog-lion.png" alt="" width={29} height={24} className="co-pay-logo" />
+                          ) : (
+                            <Icon />
+                          )}
                         </span>
                         <strong>{m.label}</strong>
                         <small>{m.hint}</small>
