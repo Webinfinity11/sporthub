@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { Suspense } from "react";
 import { FaCheck, FaClock, FaTimes } from "react-icons/fa";
+import AutoRefresh from "@/components/AutoRefresh";
 import ClearCart from "@/components/ClearCart";
 import { db, orders } from "@/db";
 import { bogEnabled } from "@/lib/bog";
@@ -114,6 +115,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
 
   return (
     <Card icon={<FaClock />} tone="wait" title="გადახდა მუშავდება">
+      <AutoRefresh />
       <p>
         შეკვეთა <strong>{order.number}</strong>. ბანკის პასუხს ველოდებით, ეს ჩვეულებრივ რამდენიმე წამი გრძელდება.
       </p>
