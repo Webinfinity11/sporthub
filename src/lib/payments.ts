@@ -1,6 +1,5 @@
 import "server-only";
 import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
-import { updateTag } from "next/cache";
 import { db, orderItems, orders } from "@/db";
 import { getBogReceipt, paymentStateOf } from "./bog";
 import { flittStateOf, getFlittStatus } from "./flitt";
@@ -52,7 +51,6 @@ export async function syncBogPayment(bogOrderId: string, origin: string) {
     .where(and(eq(orders.bogOrderId, bogOrderId), ne(orders.paymentStatus, state)))
     .returning({ id: orders.id });
   if (changed) {
-    updateTag("orders");
     if (state === "paid") {
       const mail = await orderMail(changed.id);
       if (mail) await sendOrderEmails(origin, mail, await getSiteSettings());
@@ -71,7 +69,6 @@ export async function syncFlittPayment(flittOrderId: string, origin: string) {
     .where(and(eq(orders.flittOrderId, flittOrderId), ne(orders.paymentStatus, state)))
     .returning({ id: orders.id });
   if (changed) {
-    updateTag("orders");
     if (state === "paid") {
       const mail = await orderMail(changed.id);
       if (mail) await sendOrderEmails(origin, mail, await getSiteSettings());
@@ -97,7 +94,6 @@ export async function syncInstallment(orderId: number, origin: string) {
     .where(and(eq(orders.id, orderId), ne(orders.paymentDetail, detail)))
     .returning({ id: orders.id });
   if (changed) {
-    updateTag("orders");
     // first time the bank's approval arrives (a paid status may skip "awaiting" when the bank confirms on its own)
     if ((state === "awaiting" || state === "paid") && o.state !== "awaiting" && o.state !== "paid") {
       const mail = await orderMail(orderId);
