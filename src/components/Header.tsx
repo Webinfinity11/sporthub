@@ -62,6 +62,11 @@ export default function Header({ nav }: { nav: NavItem[] }) {
               <FaSearch />
             </button>
 
+            <Link href="/cart" className="cart-toggle" aria-label={`კალათა (${store.cartCount})`}>
+              <HiOutlineShoppingBag />
+              {store.cartCount > 0 && <span className="cart-toggle-count">{store.cartCount}</span>}
+            </Link>
+
             <button
               className="menu-toggle"
               aria-label="მენიუ"

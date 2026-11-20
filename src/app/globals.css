@@ -445,7 +445,8 @@ ul {
 .header .menu-toggle { display: none; }
 
 /* search */
-.header .search-toggle { display: none; }
+.header .search-toggle,
+.header .cart-toggle { display: none; }
 .header .main-menu > li.search-link > button { cursor: pointer; padding-right: 8px; }
 .header .search-link .cart-icon svg { font-size: 20px; }
 .header .main-menu > li.search-link > button:hover { color: var(--primary); }
@@ -623,6 +624,33 @@ ul {
     font-size: 17px;
     cursor: pointer;
   }
+  .header .main-menu > li.shopping-cart { display: none; }
+  .header .cart-toggle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 45px;
+    height: 40px;
+    margin-right: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    color: #fff;
+    font-size: 22px;
+  }
+  .header .cart-toggle-count {
+    position: absolute;
+    top: -7px;
+    right: -7px;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border-radius: 9px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+  }
   .hs-bar { padding: 12px 0; }
   .hs-bar input { font-size: 16px; }
   .hs-results { max-height: calc(100vh - 170px); }
@@ -631,6 +659,13 @@ ul {
   .hs-thumb { width: 52px; height: 52px; }
   .hs-name { font-size: 14px; }
   .hs-all { width: 100%; justify-content: center; }
+}
+/* narrow phones: logo plus search, cart and menu buttons stay on one row */
+@media (max-width: 420px) {
+  .header .brand img { width: 150px; }
+  .header .search-toggle,
+  .header .cart-toggle,
+  .header .menu-toggle { width: 40px; }
 }
 
 /* =========================================================
