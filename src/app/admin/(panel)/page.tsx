@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lte, ne, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, lte, ne, sql, sum } from "drizzle-orm";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import Link from "next/link";
@@ -20,11 +20,13 @@ export default async function Dashboard() {
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const notCancelled = ne(orders.status, "cancelled");
+  // counts and revenue only for real orders: cash / transfer (no online payment state), or paid / bank-approved online
+  const realOrder = inArray(orders.paymentStatus, ["", "paid", "awaiting"]);
 
   const [[newCount], [today], [month], [activeProducts], recent, lowStock] = await Promise.all([
-    db.select({ n: count() }).from(orders).where(eq(orders.status, "new")),
-    db.select({ n: count(), sum: sum(orders.total) }).from(orders).where(and(gte(orders.createdAt, dayStart), notCancelled)),
-    db.select({ n: count(), sum: sum(orders.total) }).from(orders).where(and(gte(orders.createdAt, monthStart), notCancelled)),
+    db.select({ n: count() }).from(orders).where(and(eq(orders.status, "new"), realOrder)),
+    db.select({ n: count(), sum: sum(orders.total) }).from(orders).where(and(gte(orders.createdAt, dayStart), notCancelled, realOrder)),
+    db.select({ n: count(), sum: sum(orders.total) }).from(orders).where(and(gte(orders.createdAt, monthStart), notCancelled, realOrder)),
     db.select({ n: count() }).from(products).where(eq(products.active, true)),
     db.select().from(orders).orderBy(desc(orders.createdAt)).limit(8),
     db
