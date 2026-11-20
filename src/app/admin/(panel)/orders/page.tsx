@@ -1,10 +1,12 @@
 import { and, count, desc, eq, ilike, or, type SQL } from "drizzle-orm";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { FaSearch } from "react-icons/fa";
 import { db, orders, type OrderStatus } from "@/db";
 import { fmtDate, fmtPhone } from "@/lib/admin-format";
 import { requireAdmin } from "@/lib/auth";
+import { siteOrigin, syncStalePayments } from "@/lib/payments";
 import { formatPrice, orderStatuses, paymentLabel, paymentStates, statusLabel } from "@/lib/data";
 
 export const instant = false;
@@ -15,6 +17,8 @@ const PER_PAGE = 30;
 
 export default async function OrdersPage({ searchParams }: PageProps<"/admin/orders">) {
   await requireAdmin();
+  // payments left on the bank's page: ask the bank, mark expired ones
+  await syncStalePayments(siteOrigin(await headers())).catch((e) => console.error("stale payment sync failed", e));
   const sp = await searchParams;
   const status = orderStatuses.some((s) => s.id === sp.status) ? (sp.status as OrderStatus) : null;
   const q = typeof sp.q === "string" ? sp.q.trim().slice(0, 60) : "";

@@ -1,8 +1,8 @@
 import "server-only";
 import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { db, orderItems, orders } from "@/db";
-import { getBogReceipt, paymentStateOf } from "./bog";
-import { flittStateOf, getFlittStatus } from "./flitt";
+import { bogEnabled, getBogReceipt, paymentStateOf } from "./bog";
+import { flittEnabled, flittStateOf, getFlittStatus } from "./flitt";
 import { installmentStateOf, installmentStatus, tbcEnabled } from "./tbc";
 import { paymentLabel } from "./data";
 import { sendOrderEmails, type OrderMail } from "./order-emails";
@@ -124,6 +124,45 @@ export async function syncOpenInstallments(origin: string) {
     }
   }
   return open.length;
+}
+
+/**
+ * Card and split payments still "pending": asks the bank again (the buyer may have closed the bank's
+ * page, so neither the result page nor a callback came). The bank's payment page lives 30 minutes
+ * (ttl in bog.ts), so a payment still pending 35 minutes after the order can no longer complete and
+ * is marked failed. A late "paid" callback would still turn it paid. Called when the admin opens orders.
+ */
+export async function syncStalePayments(origin: string) {
+  const open = await db
+    .select({ id: orders.id, payment: orders.payment, bog: orders.bogOrderId, flitt: orders.flittOrderId })
+    .from(orders)
+    .where(
+      and(
+        inArray(orders.payment, ["card", "split"]),
+        eq(orders.paymentStatus, "pending"),
+        sql`${orders.createdAt} < now() - interval '2 minutes'`,
+        gt(orders.createdAt, sql`now() - interval '7 days'`),
+      ),
+    )
+    .limit(15);
+  for (const o of open) {
+    try {
+      if (o.payment === "card" && o.bog && bogEnabled) await syncBogPayment(o.bog, origin);
+      if (o.payment === "split" && o.flitt && flittEnabled) await syncFlittPayment(o.flitt, origin);
+    } catch (e) {
+      console.error("payment re-check failed for order", o.id, e);
+    }
+  }
+  await db
+    .update(orders)
+    .set({ paymentStatus: "failed", paymentDetail: "გადახდა არ დასრულდა, ბანკის გვერდის ვადა გავიდა", updatedAt: new Date() })
+    .where(
+      and(
+        inArray(orders.payment, ["card", "split"]),
+        eq(orders.paymentStatus, "pending"),
+        sql`${orders.createdAt} < now() - interval '35 minutes'`,
+      ),
+    );
 }
 
 /** Public address for links in emails and bank redirects. */

@@ -297,6 +297,7 @@ a.adm-kpi:hover { border-color: #cbd5e1; }
 .adm-status { color: var(--st); background: var(--st-bg); }
 /* card payment state next to the payment method */
 .adm-pay { display: inline-block; margin-left: 8px; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; line-height: 20px; color: #475569; background: #f1f5f9; }
+.adm-pay.flat { margin-left: 0; white-space: nowrap; }
 .adm-pay.p-paid { color: #15803d; background: #dcfce7; }
 .adm-pay.p-failed { color: #b91c1c; background: #fee2e2; }
 .adm-pay.p-pending { color: #b45309; background: #fef3c7; }

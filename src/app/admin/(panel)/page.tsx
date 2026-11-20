@@ -1,9 +1,11 @@
 import { and, count, desc, eq, gte, lte, ne, sql, sum } from "drizzle-orm";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { db, orders, products } from "@/db";
 import { requireAdmin } from "@/lib/auth";
-import { formatPrice, statusLabel } from "@/lib/data";
+import { siteOrigin, syncStalePayments } from "@/lib/payments";
+import { formatPrice, paymentLabel, paymentStates, statusLabel } from "@/lib/data";
 import { fmtDate } from "@/lib/admin-format";
 
 export const instant = false;
@@ -12,6 +14,8 @@ export const metadata: Metadata = { title: "მიმოხილვა" };
 
 export default async function Dashboard() {
   await requireAdmin();
+  // payments left on the bank's page: ask the bank, mark expired ones
+  await syncStalePayments(siteOrigin(await headers())).catch((e) => console.error("stale payment sync failed", e));
   const now = new Date();
   const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -89,6 +93,7 @@ export default async function Dashboard() {
                   <th>მყიდველი</th>
                   <th>თარიღი</th>
                   <th className="num">ჯამი</th>
+                  <th>გადახდა</th>
                   <th>სტატუსი</th>
                 </tr>
               </thead>
@@ -103,6 +108,13 @@ export default async function Dashboard() {
                     <td>{o.name}</td>
                     <td className="adm-muted">{fmtDate(o.createdAt)}</td>
                     <td className="num">{formatPrice(o.total)}</td>
+                    <td>
+                      {o.paymentStatus ? (
+                        <span className={`adm-pay flat p-${o.paymentStatus}`}>{paymentStates[o.paymentStatus] ?? o.paymentStatus}</span>
+                      ) : (
+                        <span className="adm-muted">{paymentLabel(o.payment)}</span>
+                      )}
+                    </td>
                     <td>
                       <span className={`adm-status s-${o.status}`}>{statusLabel(o.status)}</span>
                     </td>
