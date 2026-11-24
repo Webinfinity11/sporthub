@@ -389,7 +389,7 @@ export default function CheckoutView({
                           {m.id === "card" ? (
                             <img src="/brand/bog-lion.png" alt="" width={29} height={24} className="co-pay-logo" />
                           ) : m.id === "installment" || m.id === "split" ? (
-                            <span className="co-pay-tbc">tbc</span>
+                            <img src="/brand/tbc.png" alt="" width={28} height={28} className="co-pay-logo" />
                           ) : (
                             <Icon />
                           )}
