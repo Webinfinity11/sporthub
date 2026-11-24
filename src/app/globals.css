@@ -2095,6 +2095,18 @@ ul {
 .co-pay-icon { color: var(--gray); font-size: 20px; margin-bottom: 6px; transition: color 0.15s ease; }
 .co-pay-option input:checked + .co-pay-card .co-pay-icon { color: var(--primary); }
 .co-pay-logo { display: block; width: 29px; height: 24px; object-fit: contain; }
+/* payment methods: one full-width row per method */
+.co-pay.co-pay-list { grid-template-columns: 1fr; gap: 10px; }
+.co-pay-list .co-pay-card { flex-direction: row; align-items: center; gap: 16px; padding: 16px 18px; border-radius: 8px; }
+.co-pay-list .co-pay-icon { flex: none; width: 48px; height: 48px; margin: 0; display: flex; align-items: center; justify-content: center; border-radius: 10px; background: #f1f5f9; font-size: 22px; }
+.co-pay-list .co-pay-logo { width: 32px; height: 28px; }
+.co-pay-option input:checked + .co-pay-card .co-pay-icon { background: #e8f1ff; }
+.co-pay-tbc { font-weight: 800; font-size: 17px; letter-spacing: -0.5px; color: #00a3e0; text-transform: lowercase; }
+.co-pay-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.co-pay-list .co-pay-card strong { font-size: 15px; }
+.co-pay-list .co-pay-card small { font-size: 13px; }
+.co-pay-radio { flex: none; width: 20px; height: 20px; border-radius: 50%; border: 2px solid #cbd5e1; transition: border-color 0.15s ease, box-shadow 0.15s ease; }
+.co-pay-option input:checked + .co-pay-card .co-pay-radio { border-color: var(--primary); box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 10px var(--primary); }
 .co-pay-card strong { color: var(--dark); font-size: 14px; }
 .co-pay-card small { color: var(--gray); font-size: 12px; line-height: 17px; }
 

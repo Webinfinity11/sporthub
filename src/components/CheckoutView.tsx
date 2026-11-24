@@ -378,7 +378,7 @@ export default function CheckoutView({
 
             <div className="co-section">
               <h2>გადახდა</h2>
-              <div className="co-pay" role="radiogroup" aria-label="გადახდის მეთოდი">
+              <div className="co-pay co-pay-list" role="radiogroup" aria-label="გადახდის მეთოდი">
                 {methods.map((m, i) => {
                   const Icon = payIcons[m.id];
                   return (
@@ -388,12 +388,17 @@ export default function CheckoutView({
                         <span className="co-pay-icon" aria-hidden>
                           {m.id === "card" ? (
                             <img src="/brand/bog-lion.png" alt="" width={29} height={24} className="co-pay-logo" />
+                          ) : m.id === "installment" || m.id === "split" ? (
+                            <span className="co-pay-tbc">tbc</span>
                           ) : (
                             <Icon />
                           )}
                         </span>
-                        <strong>{m.label}</strong>
-                        <small>{m.hint}</small>
+                        <span className="co-pay-text">
+                          <strong>{m.label}</strong>
+                          <small>{m.hint}</small>
+                        </span>
+                        <span className="co-pay-radio" aria-hidden />
                       </span>
                     </label>
                   );
