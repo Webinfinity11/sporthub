@@ -138,7 +138,7 @@ export async function syncStalePayments(origin: string) {
     .from(orders)
     .where(
       and(
-        inArray(orders.payment, ["card", "split"]),
+        inArray(orders.payment, ["card", "bogloan", "split"]),
         eq(orders.paymentStatus, "pending"),
         sql`${orders.createdAt} < now() - interval '2 minutes'`,
         gt(orders.createdAt, sql`now() - interval '7 days'`),
@@ -147,7 +147,7 @@ export async function syncStalePayments(origin: string) {
     .limit(15);
   for (const o of open) {
     try {
-      if (o.payment === "card" && o.bog && bogEnabled) await syncBogPayment(o.bog, origin);
+      if ((o.payment === "card" || o.payment === "bogloan") && o.bog && bogEnabled) await syncBogPayment(o.bog, origin);
       if (o.payment === "split" && o.flitt && flittEnabled) await syncFlittPayment(o.flitt, origin);
     } catch (e) {
       console.error("payment re-check failed for order", o.id, e);
@@ -158,7 +158,7 @@ export async function syncStalePayments(origin: string) {
     .set({ paymentStatus: "failed", paymentDetail: "გადახდა არ დასრულდა, ბანკის გვერდის ვადა გავიდა", updatedAt: new Date() })
     .where(
       and(
-        inArray(orders.payment, ["card", "split"]),
+        inArray(orders.payment, ["card", "bogloan", "split"]),
         eq(orders.paymentStatus, "pending"),
         sql`${orders.createdAt} < now() - interval '35 minutes'`,
       ),

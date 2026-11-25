@@ -16,7 +16,7 @@ export default function BankPanel({
   reference,
 }: {
   id: number;
-  payment: "card" | "installment" | "split";
+  payment: "card" | "bogloan" | "installment" | "split";
   state: string;
   detail: string;
   reference: string | null;
@@ -35,7 +35,7 @@ export default function BankPanel({
   return (
     <section className="adm-panel">
       <div className="adm-panel-head">
-        <h2>{payment === "card" ? "ბარათით გადახდა (BOG)" : payment === "split" ? "განაწილება (Flitt)" : "განვადება (TBC)"}</h2>
+        <h2>{payment === "card" ? "ბარათით გადახდა (BOG)" : payment === "bogloan" ? "განვადება (BOG)" : payment === "split" ? "განაწილება (Flitt)" : "განვადება (TBC)"}</h2>
         {pending && <span className="adm-muted">მიმდინარეობს...</span>}
       </div>
       {detail && <p className="adm-muted">ბანკის სტატუსი: {detail}</p>}

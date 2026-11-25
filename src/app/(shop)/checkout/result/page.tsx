@@ -48,7 +48,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
   const settings = await getSiteSettings();
   const phone = settings.phones[0];
 
-  if (!order || !["card", "installment", "split"].includes(order.payment)) {
+  if (!order || !["card", "bogloan", "installment", "split"].includes(order.payment)) {
     return (
       <Card icon={<FaTimes />} tone="fail" title="შეკვეთა ვერ მოიძებნა">
         <p>შეამოწმეთ ბმული ან დაგვიკავშირდით.</p>
@@ -61,7 +61,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
   let state = order.state;
   const origin = siteOrigin(await headers());
   try {
-    if (order.payment === "card" && state === "pending" && order.bogOrderId && bogEnabled) state = await syncBogPayment(order.bogOrderId, origin);
+    if ((order.payment === "card" || order.payment === "bogloan") && state === "pending" && order.bogOrderId && bogEnabled) state = await syncBogPayment(order.bogOrderId, origin);
     if (order.payment === "split" && state === "pending" && order.flittOrderId && flittEnabled) state = await syncFlittPayment(order.flittOrderId, origin);
     if (order.payment === "installment" && (state === "pending" || state === "awaiting") && order.tbcSessionId && tbcEnabled)
       state = (await syncInstallment(order.id, origin)) ?? state;
@@ -73,10 +73,10 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
 
   if (state === "paid") {
     return (
-      <Card icon={<FaCheck />} tone="ok" title="გადახდა წარმატებულია">
+      <Card icon={<FaCheck />} tone="ok" title={order.payment === "bogloan" ? "განვადება გაფორმდა" : "გადახდა წარმატებულია"}>
         <ClearCart />
         <p className="co-done-number">
-          შეკვეთის ნომერი <strong>{order.number}</strong>, გადახდილია {formatPrice(order.total)}
+          შეკვეთის ნომერი <strong>{order.number}</strong>, {order.payment === "bogloan" ? "ჯამი" : "გადახდილია"} {formatPrice(order.total)}
         </p>
         <ol className="co-next">
           <li>
@@ -89,6 +89,21 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
           </li>
         </ol>
         <Actions phone={phone} />
+      </Card>
+    );
+  }
+
+  if (state === "failed" && order.payment === "bogloan") {
+    return (
+      <Card icon={<FaTimes />} tone="fail" title="განვადება ვერ გაფორმდა">
+        <p>
+          შეკვეთა <strong>{order.number}</strong>: განვადება არ დამტკიცდა ან გაუქმდა. სცადეთ თავიდან ან აირჩიეთ სხვა გადახდის მეთოდი.
+        </p>
+        <div className="co-done-actions">
+          <Link href="/checkout" className="thm-btn">
+            თავიდან ცდა
+          </Link>
+        </div>
       </Card>
     );
   }

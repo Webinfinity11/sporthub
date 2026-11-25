@@ -505,7 +505,7 @@ export async function bankAction(id: number, what: "refresh" | "confirm" | "canc
   if (!o) return { error: "შეკვეთა ვერ მოიძებნა" };
   const origin = siteOrigin(await headers());
   try {
-    if (o.payment === "card" && o.bogOrderId) {
+    if ((o.payment === "card" || o.payment === "bogloan") && o.bogOrderId) {
       await syncBogPayment(o.bogOrderId, origin);
     } else if (o.payment === "split" && o.flittOrderId) {
       await syncFlittPayment(o.flittOrderId, origin);

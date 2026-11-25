@@ -2,7 +2,7 @@
 
 /* eslint-disable @next/next/no-img-element */
 import Link from "next/link";
-import { useActionState, useEffect, useState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import {
   FaAngleDown,
   FaAngleRight,
@@ -27,6 +27,7 @@ import { useSiteSettings } from "./SiteSettings";
 
 const payIcons: Record<PaymentMethod, React.ComponentType> = {
   card: FaCreditCard,
+  bogloan: FaCalendarCheck,
   cash: FaMoneyBillWave,
   transfer: FaUniversity,
   installment: FaCalendarCheck,
@@ -89,6 +90,30 @@ function Field({
 }
 
 type Promo = { code: string; percent: number } | null;
+
+/** Bank of Georgia installment calculator (loaded from the bank, see loadBogSdk) */
+type BogCalculator = {
+  open: (o: {
+    amount: number;
+    bnpl?: boolean;
+    onRequest: (selected: { month: number; discount_code: string }, success: (orderId: string) => void, close: () => void) => boolean;
+  }) => void;
+};
+declare global {
+  interface Window {
+    BOG?: { Calculator: BogCalculator };
+  }
+}
+
+function loadBogSdk(clientId: string) {
+  if (window.BOG || document.getElementById("bog-sdk")) return;
+  const s = document.createElement("script");
+  s.id = "bog-sdk";
+  s.src = `https://webstatic.bog.ge/bog-sdk/bog-sdk.js?version=2&client_id=${encodeURIComponent(clientId)}`;
+  // a failed load is removed, so the next try loads it again
+  s.onerror = () => s.remove();
+  document.body.appendChild(s);
+}
 
 function Summary({ variant, promo, zone }: { variant: "mobile" | "panel"; promo: Promo; zone: DeliveryZone | null }) {
   const { cart, cartSubtotal, cartCount } = useStore();
@@ -210,12 +235,14 @@ function Done({ orderNumber, total }: { orderNumber: string; total: number }) {
   );
 }
 
-/** Online methods show only when their credentials are set: card (Bank of Georgia), installment (TBC), split (Flitt). */
+/** Online methods show only when their credentials are set: card and installment (Bank of Georgia), installment (TBC), split (Flitt). */
 export default function CheckoutView({
   cardEnabled = false,
   installmentEnabled = false,
   splitEnabled = false,
+  bogClientId = "",
 }: {
+  bogClientId?: string;
   cardEnabled?: boolean;
   installmentEnabled?: boolean;
   splitEnabled?: boolean;
@@ -244,8 +271,50 @@ export default function CheckoutView({
     });
   };
 
-  const enabled: Record<string, boolean> = { card: cardEnabled, installment: installmentEnabled, split: splitEnabled };
+  const enabled: Record<string, boolean> = { card: cardEnabled, bogloan: cardEnabled, installment: installmentEnabled, split: splitEnabled };
   const methods = paymentMethods.filter((m) => enabled[m.id] ?? true);
+
+  // BOG installment: the form is sent only after the buyer picks a term in the bank's calculator
+  const loanType = useRef<HTMLInputElement>(null);
+  const loanMonth = useRef<HTMLInputElement>(null);
+  const [loanError, setLoanError] = useState("");
+
+  useEffect(() => {
+    if (cardEnabled && bogClientId) loadBogSdk(bogClientId);
+  }, [cardEnabled, bogClientId]);
+
+  const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    const form = e.currentTarget;
+    setLoanError("");
+    if (new FormData(form).get("payment") !== "bogloan") return;
+    // second pass, started by the calculator: the term is filled in
+    if (loanMonth.current?.value) return;
+    e.preventDefault();
+    if (!zone) return setLoanError("ჯერ აირჩიეთ მიწოდების ზონა");
+    if (!window.BOG) {
+      loadBogSdk(bogClientId);
+      return setLoanError("ბანკის კალკულატორი იტვირთება, სცადეთ რამდენიმე წამში");
+    }
+    const subtotal = cart.reduce((s, l) => s + l.total, 0);
+    const discount = promo ? promoDiscount(subtotal, promo.percent) : 0;
+    window.BOG.Calculator.open({
+      amount: Math.round((subtotal - discount + deliveryCost(items, zone)) * 100) / 100,
+      bnpl: false,
+      onRequest: (selected, _success, close) => {
+        close();
+        loanType.current!.value = selected.discount_code;
+        loanMonth.current!.value = String(selected.month);
+        form.requestSubmit();
+        // the form data is already read, so a later submit opens the calculator again
+        setTimeout(() => {
+          if (loanType.current) loanType.current.value = "";
+          if (loanMonth.current) loanMonth.current.value = "";
+        });
+        // false: the shop creates the order and redirects, not the calculator
+        return false;
+      },
+    });
+  };
 
   useEffect(() => {
     if (state.status === "ok") clearCart();
@@ -293,7 +362,9 @@ export default function CheckoutView({
   return (
     <section className="checkout">
       <div className="container">
-        <form action={action} className="co-grid" noValidate>
+        <form action={action} onSubmit={onSubmit} className="co-grid" noValidate>
+          <input type="hidden" name="loanType" ref={loanType} defaultValue="" />
+          <input type="hidden" name="loanMonth" ref={loanMonth} defaultValue="" />
           <input type="hidden" name="items" value={JSON.stringify(cart.map(({ id, qty }) => ({ id, qty })))} />
 
           <div className="co-main">
@@ -386,7 +457,7 @@ export default function CheckoutView({
                       <input type="radio" name="payment" value={m.id} defaultChecked={typed.payment ? typed.payment === m.id : i === 0} />
                       <span className="co-pay-card">
                         <span className="co-pay-icon" aria-hidden>
-                          {m.id === "card" ? (
+                          {m.id === "card" || m.id === "bogloan" ? (
                             <img src="/brand/bog-lion.png" alt="" width={29} height={24} className="co-pay-logo" />
                           ) : m.id === "installment" || m.id === "split" ? (
                             <img src="/brand/tbc.png" alt="" width={28} height={28} className="co-pay-logo" />
@@ -404,7 +475,7 @@ export default function CheckoutView({
                   );
                 })}
               </div>
-              {errors.payment && <p className="co-error">{errors.payment}</p>}
+              {(loanError || errors.payment) && <p className="co-error">{loanError || errors.payment}</p>}
             </div>
 
             <div className="co-section">

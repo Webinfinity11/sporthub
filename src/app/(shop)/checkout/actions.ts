@@ -74,8 +74,14 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   if (!zone) fields.zone = "აირჩიეთ მიწოდების ზონა";
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "ელ-ფოსტა არასწორია";
   if (address.length < 5) fields.address = "მიუთითეთ მისამართი";
-  const offline = (payment === "card" && !bogEnabled) || (payment === "installment" && !tbcEnabled) || (payment === "split" && !flittEnabled);
+  const offline = ((payment === "card" || payment === "bogloan") && !bogEnabled) || (payment === "installment" && !tbcEnabled) || (payment === "split" && !flittEnabled);
   if (!paymentMethods.some((m) => m.id === payment) || offline) fields.payment = "აირჩიეთ გადახდის მეთოდი";
+
+  // BOG installment: the plan the buyer picked in the bank's calculator
+  const loan = { type: get("loanType"), month: Number(get("loanMonth")) };
+  if (payment === "bogloan" && !(/^[\w-]{1,40}$/.test(loan.type) && Number.isInteger(loan.month) && loan.month > 0 && loan.month <= 60)) {
+    fields.payment = "აირჩიეთ განვადების ვადა";
+  }
 
   let raw: unknown = [];
   try {
@@ -135,7 +141,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
           address,
           comment,
           payment,
-          paymentStatus: ["card", "installment", "split"].includes(payment) ? "pending" : "",
+          paymentStatus: ["card", "bogloan", "installment", "split"].includes(payment) ? "pending" : "",
           subtotal,
           delivery: ship,
           promoCode: promo || null,
@@ -167,7 +173,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   const origin = siteOrigin(await headers());
 
   // card: the order waits for the bank; emails go out when the payment is confirmed (lib/payments.ts)
-  if (payment === "card") {
+  if (payment === "card" || payment === "bogloan") {
     try {
       const bog = await createBogOrder({
         number,
@@ -177,16 +183,18 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
         total,
         origin,
         buyer: { name, phone: phone.replace(/^\+?995/, ""), email: email || undefined },
+        loan: payment === "bogloan" ? loan : undefined,
       });
       await db.update(orders).set({ bogOrderId: bog.id }).where(eq(orders.id, orderId));
       return { status: "redirect", url: bog.redirect };
     } catch (e) {
       console.error(e);
       await db.update(orders).set({ paymentStatus: "failed" }).where(eq(orders.id, orderId));
+      const what = payment === "bogloan" ? "განვადების გაფორმება" : "ბარათით გადახდა";
       return {
         status: "error",
-        message: "ბარათით გადახდა ახლა ვერ მოხერხდა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.",
-        fields: { payment: "ბარათით გადახდა დროებით მიუწვდომელია" },
+        message: `${what} ახლა ვერ მოხერხდა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.`,
+        fields: { payment: `${what} დროებით მიუწვდომელია` },
         values,
       };
     }

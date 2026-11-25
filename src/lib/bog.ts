@@ -8,6 +8,8 @@ import { createVerify } from "node:crypto";
 const { BOG_CLIENT_ID: clientId, BOG_CLIENT_SECRET: clientSecret } = process.env;
 
 export const bogEnabled = Boolean(clientId && clientSecret);
+/** public part of the credentials, used by the bank's installment calculator in the browser */
+export const bogClientId = clientId ?? "";
 
 const TOKEN_URL = "https://oauth2.bog.ge/auth/realms/bog/protocol/openid-connect/token";
 const API = "https://api.bog.ge/payments/v1";
@@ -55,6 +57,8 @@ export type BogOrderInput = {
   total: number;
   origin: string;
   buyer?: { name: string; phone: string; email?: string };
+  /** installment plan chosen in the bank's calculator; without it the payment is a normal card payment */
+  loan?: { type: string; month: number };
 };
 
 const money = (n: number) => Math.round(n * 100) / 100;
@@ -88,6 +92,7 @@ export async function createBogOrder(o: BogOrderInput): Promise<{ id: string; re
       },
       redirect_urls: { success: back, fail: `${back}&fail=1` },
       ttl: 30,
+      ...(o.loan ? { payment_method: ["bog_loan"], config: { loan: o.loan } } : {}),
       ...(o.buyer ? { buyer: { full_name: o.buyer.name, masked_phone: o.buyer.phone, ...(o.buyer.email ? { masked_email: o.buyer.email } : {}) } } : {}),
     }),
     cache: "no-store",
