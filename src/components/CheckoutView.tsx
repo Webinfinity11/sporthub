@@ -22,7 +22,7 @@ import {
 } from "react-icons/fa";
 import { useStore } from "./Store";
 import { checkPromo, placeOrder, type OrderState } from "@/app/(shop)/checkout/actions";
-import { deliveryCost, deliveryZones, formatPrice, paymentMethods, promoDiscount, shipText, telHref, zoneLabel, type DeliveryZone, type PaymentMethod } from "@/lib/data";
+import { deliveryCost, deliveryZones, formatPrice, isBogPayment, paymentMethods, promoDiscount, shipText, telHref, zoneLabel, type DeliveryZone, type PaymentMethod } from "@/lib/data";
 import { useSiteSettings } from "./SiteSettings";
 
 const payIcons: Record<PaymentMethod, React.ComponentType> = {
@@ -30,6 +30,8 @@ const payIcons: Record<PaymentMethod, React.ComponentType> = {
   bogloan: FaCalendarCheck,
   cash: FaMoneyBillWave,
   transfer: FaUniversity,
+  bogbnpl: FaChartPie,
+  credo: FaCalendarCheck,
   installment: FaCalendarCheck,
   split: FaChartPie,
 };
@@ -235,17 +237,19 @@ function Done({ orderNumber, total }: { orderNumber: string; total: number }) {
   );
 }
 
-/** Online methods show only when their credentials are set: card and installment (Bank of Georgia), installment (TBC), split (Flitt). */
+/** Online methods show only when their credentials are set: card, installment and part-by-part (Bank of Georgia), installment (Credo, TBC), split (Flitt). */
 export default function CheckoutView({
   cardEnabled = false,
   installmentEnabled = false,
   splitEnabled = false,
+  credoEnabled = false,
   bogClientId = "",
 }: {
   bogClientId?: string;
   cardEnabled?: boolean;
   installmentEnabled?: boolean;
   splitEnabled?: boolean;
+  credoEnabled?: boolean;
 }) {
   const phone = useSiteSettings().phones[0];
   const { cart, clearCart } = useStore();
@@ -271,10 +275,10 @@ export default function CheckoutView({
     });
   };
 
-  const enabled: Record<string, boolean> = { card: cardEnabled, bogloan: cardEnabled, installment: installmentEnabled, split: splitEnabled };
+  const enabled: Record<string, boolean> = { card: cardEnabled, bogloan: cardEnabled, bogbnpl: cardEnabled, credo: credoEnabled, installment: installmentEnabled, split: splitEnabled };
   const methods = paymentMethods.filter((m) => enabled[m.id] ?? true);
 
-  // BOG installment: the form is sent only after the buyer picks a term in the bank's calculator
+  // BOG installment and part-by-part: the form is sent only after the buyer picks a term in the bank's calculator
   const loanType = useRef<HTMLInputElement>(null);
   const loanMonth = useRef<HTMLInputElement>(null);
   const [loanError, setLoanError] = useState("");
@@ -286,7 +290,8 @@ export default function CheckoutView({
   const onSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     const form = e.currentTarget;
     setLoanError("");
-    if (new FormData(form).get("payment") !== "bogloan") return;
+    const method = new FormData(form).get("payment");
+    if (method !== "bogloan" && method !== "bogbnpl") return;
     // second pass, started by the calculator: the term is filled in
     if (loanMonth.current?.value) return;
     e.preventDefault();
@@ -299,7 +304,7 @@ export default function CheckoutView({
     const discount = promo ? promoDiscount(subtotal, promo.percent) : 0;
     window.BOG.Calculator.open({
       amount: Math.round((subtotal - discount + deliveryCost(items, zone)) * 100) / 100,
-      bnpl: false,
+      bnpl: method === "bogbnpl",
       onRequest: (selected, _success, close) => {
         close();
         loanType.current!.value = selected.discount_code;
@@ -319,7 +324,10 @@ export default function CheckoutView({
   useEffect(() => {
     if (state.status === "ok") clearCart();
     // card: off to the bank; the cart is cleared on the result page once the payment is confirmed
-    if (state.status === "redirect") window.location.assign(state.url);
+    if (state.status === "redirect") {
+      if (state.clear) clearCart();
+      window.location.assign(state.url);
+    }
   }, [state, clearCart]);
 
   if (state.status === "ok") return <Done orderNumber={state.orderNumber} total={state.total} />;
@@ -457,7 +465,7 @@ export default function CheckoutView({
                       <input type="radio" name="payment" value={m.id} defaultChecked={typed.payment ? typed.payment === m.id : i === 0} />
                       <span className="co-pay-card">
                         <span className="co-pay-icon" aria-hidden>
-                          {m.id === "card" || m.id === "bogloan" ? (
+                          {isBogPayment(m.id) ? (
                             <img src="/brand/bog-lion.png" alt="" width={29} height={24} className="co-pay-logo" />
                           ) : m.id === "installment" || m.id === "split" ? (
                             <img src="/brand/tbc.png" alt="" width={28} height={28} className="co-pay-logo" />

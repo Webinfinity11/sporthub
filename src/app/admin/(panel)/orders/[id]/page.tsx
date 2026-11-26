@@ -7,7 +7,7 @@ import { FaArrowLeft, FaPhoneAlt } from "react-icons/fa";
 import { db, orderItems, orders } from "@/db";
 import { fmtDate, fmtPhone } from "@/lib/admin-format";
 import { requireAdmin } from "@/lib/auth";
-import { formatPrice, paymentLabel, paymentStates } from "@/lib/data";
+import { formatPrice, isBogPayment, isOnlinePayment, paymentLabel, paymentStates } from "@/lib/data";
 import BankPanel from "./BankPanel";
 import OrderControls from "./OrderControls";
 
@@ -131,13 +131,13 @@ export default async function OrderPage({ params }: PageProps<"/admin/orders/[id
               )}
             </dl>
           </section>
-          {(order.payment === "card" || order.payment === "bogloan" || order.payment === "installment" || order.payment === "split") && (
+          {isOnlinePayment(order.payment) && (
             <BankPanel
               id={order.id}
-              payment={order.payment}
+              payment={order.payment as React.ComponentProps<typeof BankPanel>["payment"]}
               state={order.paymentStatus}
               detail={order.paymentDetail}
-              reference={order.payment === "card" || order.payment === "bogloan" ? order.bogOrderId : order.payment === "split" ? order.flittOrderId : order.tbcSessionId}
+              reference={isBogPayment(order.payment) ? order.bogOrderId : order.payment === "credo" ? order.number : order.payment === "split" ? order.flittOrderId : order.tbcSessionId}
             />
           )}
         </div>

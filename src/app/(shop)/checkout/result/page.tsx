@@ -8,7 +8,7 @@ import AutoRefresh from "@/components/AutoRefresh";
 import ClearCart from "@/components/ClearCart";
 import { db, orders } from "@/db";
 import { bogEnabled } from "@/lib/bog";
-import { formatPrice, telHref } from "@/lib/data";
+import { formatPrice, isBogPayment, isOnlinePayment, telHref } from "@/lib/data";
 import { flittEnabled } from "@/lib/flitt";
 import { siteOrigin, syncBogPayment, syncFlittPayment, syncInstallment } from "@/lib/payments";
 import { getSiteSettings } from "@/lib/queries";
@@ -48,7 +48,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
   const settings = await getSiteSettings();
   const phone = settings.phones[0];
 
-  if (!order || !["card", "bogloan", "installment", "split"].includes(order.payment)) {
+  if (!order || !isOnlinePayment(order.payment)) {
     return (
       <Card icon={<FaTimes />} tone="fail" title="შეკვეთა ვერ მოიძებნა">
         <p>შეამოწმეთ ბმული ან დაგვიკავშირდით.</p>
@@ -61,7 +61,7 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
   let state = order.state;
   const origin = siteOrigin(await headers());
   try {
-    if ((order.payment === "card" || order.payment === "bogloan") && state === "pending" && order.bogOrderId && bogEnabled) state = await syncBogPayment(order.bogOrderId, origin);
+    if (isBogPayment(order.payment) && state === "pending" && order.bogOrderId && bogEnabled) state = await syncBogPayment(order.bogOrderId, origin);
     if (order.payment === "split" && state === "pending" && order.flittOrderId && flittEnabled) state = await syncFlittPayment(order.flittOrderId, origin);
     if (order.payment === "installment" && (state === "pending" || state === "awaiting") && order.tbcSessionId && tbcEnabled)
       state = (await syncInstallment(order.id, origin)) ?? state;
@@ -71,12 +71,16 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
 
   if (order.payment === "installment") return <InstallmentResult number={order.number} total={order.total} state={state} phone={phone} />;
 
+  // part-by-part reads like the bank installment, only the name differs
+  const loan = order.payment === "bogloan" || order.payment === "bogbnpl";
+  const plan = order.payment === "bogbnpl" ? "ნაწილ-ნაწილ გადახდა" : "განვადება";
+
   if (state === "paid") {
     return (
-      <Card icon={<FaCheck />} tone="ok" title={order.payment === "bogloan" ? "განვადება გაფორმდა" : "გადახდა წარმატებულია"}>
+      <Card icon={<FaCheck />} tone="ok" title={loan ? `${plan} გაფორმდა` : "გადახდა წარმატებულია"}>
         <ClearCart />
         <p className="co-done-number">
-          შეკვეთის ნომერი <strong>{order.number}</strong>, {order.payment === "bogloan" ? "ჯამი" : "გადახდილია"} {formatPrice(order.total)}
+          შეკვეთის ნომერი <strong>{order.number}</strong>, {loan ? "ჯამი" : "გადახდილია"} {formatPrice(order.total)}
         </p>
         <ol className="co-next">
           <li>
@@ -93,11 +97,11 @@ async function Result({ searchParams }: { searchParams: PageProps<"/checkout/res
     );
   }
 
-  if (state === "failed" && order.payment === "bogloan") {
+  if (state === "failed" && loan) {
     return (
-      <Card icon={<FaTimes />} tone="fail" title="განვადება ვერ გაფორმდა">
+      <Card icon={<FaTimes />} tone="fail" title={`${plan} ვერ გაფორმდა`}>
         <p>
-          შეკვეთა <strong>{order.number}</strong>: განვადება არ დამტკიცდა ან გაუქმდა. სცადეთ თავიდან ან აირჩიეთ სხვა გადახდის მეთოდი.
+          შეკვეთა <strong>{order.number}</strong>: {plan} არ დამტკიცდა ან გაუქმდა. სცადეთ თავიდან ან აირჩიეთ სხვა გადახდის მეთოდი.
         </p>
         <div className="co-done-actions">
           <Link href="/checkout" className="thm-btn">

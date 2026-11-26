@@ -159,11 +159,18 @@ export const paymentMethods = [
   { id: "cash", label: "ნაღდი ანგარიშსწორება", hint: "კურიერთან, საქონლის მიღებისას" },
   { id: "transfer", label: "საბანკო გადარიცხვა", hint: "რეკვიზიტებს გამოგიგზავნით" },
   { id: "bogloan", label: "განვადება საქართველოს ბანკით", hint: "ვადის არჩევა და გაფორმება ბანკში" },
+  { id: "bogbnpl", label: "ნაწილ-ნაწილ საქართველოს ბანკით", hint: "თანაბარ ნაწილებად, ბანკის გვერდზე" },
+  { id: "credo", label: "განვადება კრედო ბანკით", hint: "განაცხადი კრედო ბანკის გვერდზე" },
   { id: "installment", label: "განვადება TBC ბანკით", hint: "განაცხადი TBC ბანკის გვერდზე" },
   { id: "split", label: "განაწილება 4 ნაწილად", hint: "TBC ბანკი, Flitt-ის გვერდზე" },
 ] as const;
 
 export type PaymentMethod = (typeof paymentMethods)[number]["id"];
+
+/** methods paid through Bank of Georgia (orders.bog_order_id) */
+export const isBogPayment = (id: string) => id === "card" || id === "bogloan" || id === "bogbnpl";
+/** methods that wait for a bank's answer (orders.payment_status) */
+export const isOnlinePayment = (id: string) => isBogPayment(id) || ["installment", "split", "credo"].includes(id);
 
 
 /** promo discount on the products (delivery is not discounted), rounded to tetri */

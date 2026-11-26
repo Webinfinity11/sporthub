@@ -1,10 +1,12 @@
 /**
- * Runs once when the server starts. TBC installments have no callback, so every 5 minutes the
- * server asks its own /api/tbc/sync route to re-check open applications. Only when TBC is set up.
+ * Runs once when the server starts. TBC and Credo installments have no callback, so every 5 minutes the
+ * server asks its own /api/tbc/sync route to re-check open applications. Only when one of them is set up.
  */
 export function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs") return;
-  if (!process.env.TBC_API_KEY || !process.env.TBC_API_SECRET || !process.env.SESSION_SECRET) return;
+  const tbc = process.env.TBC_API_KEY && process.env.TBC_API_SECRET;
+  const credo = process.env.CREDO_MERCHANT_ID && process.env.CREDO_SECRET_KEY;
+  if ((!tbc && !credo) || !process.env.SESSION_SECRET) return;
 
   const g = globalThis as unknown as { __tbcSyncTimer?: ReturnType<typeof setInterval> };
   if (g.__tbcSyncTimer) return; // dev reloads call register again

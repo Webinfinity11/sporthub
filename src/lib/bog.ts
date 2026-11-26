@@ -59,6 +59,8 @@ export type BogOrderInput = {
   buyer?: { name: string; phone: string; email?: string };
   /** installment plan chosen in the bank's calculator; without it the payment is a normal card payment */
   loan?: { type: string; month: number };
+  /** part-by-part (bnpl) instead of the standard bank installment */
+  bnpl?: boolean;
 };
 
 const money = (n: number) => Math.round(n * 100) / 100;
@@ -92,7 +94,7 @@ export async function createBogOrder(o: BogOrderInput): Promise<{ id: string; re
       },
       redirect_urls: { success: back, fail: `${back}&fail=1` },
       ttl: 30,
-      ...(o.loan ? { payment_method: ["bog_loan"], config: { loan: o.loan } } : {}),
+      ...(o.loan ? { payment_method: [o.bnpl ? "bnpl" : "bog_loan"], config: { loan: o.loan } } : {}),
       ...(o.buyer ? { buyer: { full_name: o.buyer.name, masked_phone: o.buyer.phone, ...(o.buyer.email ? { masked_email: o.buyer.email } : {}) } } : {}),
     }),
     cache: "no-store",

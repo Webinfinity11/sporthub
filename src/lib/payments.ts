@@ -1,10 +1,11 @@
 import "server-only";
 import { and, eq, gt, inArray, ne, sql } from "drizzle-orm";
 import { db, orderItems, orders } from "@/db";
+import { credoEnabled, credoStateOf, getCredoStatus } from "./credo";
 import { bogEnabled, getBogReceipt, paymentStateOf } from "./bog";
 import { flittEnabled, flittStateOf, getFlittStatus } from "./flitt";
 import { installmentStateOf, installmentStatus, tbcEnabled } from "./tbc";
-import { paymentLabel } from "./data";
+import { isBogPayment, paymentLabel } from "./data";
 import { sendOrderEmails, type OrderMail } from "./order-emails";
 import { getSiteSettings } from "./queries";
 
@@ -103,22 +104,42 @@ export async function syncInstallment(orderId: number, origin: string) {
   return state;
 }
 
+/**
+ * Asks Credo for the state of an order's application and stores it. No emails from here:
+ * they go out when the application is created (checkout/actions.ts).
+ */
+export async function syncCredo(orderId: number) {
+  const [o] = await db.select({ number: orders.number, state: orders.paymentStatus }).from(orders).where(eq(orders.id, orderId)).limit(1);
+  if (!o) return null;
+  const st = await getCredoStatus(o.number);
+  if (!st) return null;
+  const state = credoStateOf(st.statusId);
+  const detail = `${st.statusId}: ${st.description}`;
+  await db
+    .update(orders)
+    .set({ paymentStatus: state, paymentDetail: detail, ...(state === "paid" && o.state !== "paid" ? { paidAt: new Date() } : {}), updatedAt: new Date() })
+    .where(and(eq(orders.id, orderId), ne(orders.paymentDetail, detail)));
+  return state;
+}
+
 /** Re-checks every open installment application (called every few minutes, see instrumentation.ts). */
 export async function syncOpenInstallments(origin: string) {
-  if (!tbcEnabled) return 0;
+  const methods = [...(tbcEnabled ? ["installment"] : []), ...(credoEnabled ? ["credo"] : [])];
+  if (!methods.length) return 0;
   const open = await db
-    .select({ id: orders.id })
+    .select({ id: orders.id, payment: orders.payment })
     .from(orders)
     .where(
       and(
-        eq(orders.payment, "installment"),
+        inArray(orders.payment, methods),
         inArray(orders.paymentStatus, ["pending", "awaiting"]),
         gt(orders.createdAt, sql`now() - interval '35 days'`),
       ),
     );
   for (const o of open) {
     try {
-      await syncInstallment(o.id, origin);
+      if (o.payment === "credo") await syncCredo(o.id);
+      else await syncInstallment(o.id, origin);
     } catch (e) {
       console.error("installment sync failed for order", o.id, e);
     }
@@ -138,7 +159,7 @@ export async function syncStalePayments(origin: string) {
     .from(orders)
     .where(
       and(
-        inArray(orders.payment, ["card", "bogloan", "split"]),
+        inArray(orders.payment, ["card", "bogloan", "bogbnpl", "split"]),
         eq(orders.paymentStatus, "pending"),
         sql`${orders.createdAt} < now() - interval '2 minutes'`,
         gt(orders.createdAt, sql`now() - interval '7 days'`),
@@ -147,7 +168,7 @@ export async function syncStalePayments(origin: string) {
     .limit(15);
   for (const o of open) {
     try {
-      if ((o.payment === "card" || o.payment === "bogloan") && o.bog && bogEnabled) await syncBogPayment(o.bog, origin);
+      if (isBogPayment(o.payment) && o.bog && bogEnabled) await syncBogPayment(o.bog, origin);
       if (o.payment === "split" && o.flitt && flittEnabled) await syncFlittPayment(o.flitt, origin);
     } catch (e) {
       console.error("payment re-check failed for order", o.id, e);
@@ -158,7 +179,7 @@ export async function syncStalePayments(origin: string) {
     .set({ paymentStatus: "failed", paymentDetail: "გადახდა არ დასრულდა, ბანკის გვერდის ვადა გავიდა", updatedAt: new Date() })
     .where(
       and(
-        inArray(orders.payment, ["card", "bogloan", "split"]),
+        inArray(orders.payment, ["card", "bogloan", "bogbnpl", "split"]),
         eq(orders.paymentStatus, "pending"),
         sql`${orders.createdAt} < now() - interval '35 minutes'`,
       ),

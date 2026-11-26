@@ -6,8 +6,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { db, orderItems, orders, products, promoCodes } from "@/db";
-import { deliveryCost, isDeliveryZone, normalizePromo, paymentLabel, paymentMethods, PROMO_RE, promoDiscount, zoneLabel } from "@/lib/data";
+import { deliveryCost, isBogPayment, isDeliveryZone, isOnlinePayment, normalizePromo, paymentLabel, paymentMethods, PROMO_RE, promoDiscount, zoneLabel } from "@/lib/data";
 import { bogEnabled, createBogOrder } from "@/lib/bog";
+import { createCredoOrder, credoEnabled } from "@/lib/credo";
 import { sendOrderEmails } from "@/lib/order-emails";
 import { siteOrigin } from "@/lib/payments";
 import { createFlittCheckout, flittEnabled, flittOrderId } from "@/lib/flitt";
@@ -20,7 +21,8 @@ export type OrderState =
   | { status: "error"; message: string; fields: Record<string, string>; values: Record<string, string> }
   | { status: "ok"; orderNumber: string; total: number }
   /** card payment: the buyer goes to the bank's payment page */
-  | { status: "redirect"; url: string };
+  /** `clear`: empty the cart now, because the bank does not send the buyer back */
+  | { status: "redirect"; url: string; clear?: boolean };
 
 export type PromoCheck = { ok: true; code: string; percent: number } | { ok: false; error: string };
 
@@ -74,12 +76,13 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   if (!zone) fields.zone = "აირჩიეთ მიწოდების ზონა";
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fields.email = "ელ-ფოსტა არასწორია";
   if (address.length < 5) fields.address = "მიუთითეთ მისამართი";
-  const offline = ((payment === "card" || payment === "bogloan") && !bogEnabled) || (payment === "installment" && !tbcEnabled) || (payment === "split" && !flittEnabled);
+  const offline = (isBogPayment(payment) && !bogEnabled) || (payment === "credo" && !credoEnabled) || (payment === "installment" && !tbcEnabled) || (payment === "split" && !flittEnabled);
   if (!paymentMethods.some((m) => m.id === payment) || offline) fields.payment = "აირჩიეთ გადახდის მეთოდი";
 
-  // BOG installment: the plan the buyer picked in the bank's calculator
+  // BOG installment and part-by-part: the plan the buyer picked in the bank's calculator
   const loan = { type: get("loanType"), month: Number(get("loanMonth")) };
-  if (payment === "bogloan" && !(/^[\w-]{1,40}$/.test(loan.type) && Number.isInteger(loan.month) && loan.month > 0 && loan.month <= 60)) {
+  const withPlan = payment === "bogloan" || payment === "bogbnpl";
+  if (withPlan && !(/^[\w-]{1,40}$/.test(loan.type) && Number.isInteger(loan.month) && loan.month > 0 && loan.month <= 60)) {
     fields.payment = "აირჩიეთ განვადების ვადა";
   }
 
@@ -141,7 +144,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
           address,
           comment,
           payment,
-          paymentStatus: ["card", "bogloan", "installment", "split"].includes(payment) ? "pending" : "",
+          paymentStatus: isOnlinePayment(payment) ? "pending" : "",
           subtotal,
           delivery: ship,
           promoCode: promo || null,
@@ -173,7 +176,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   const origin = siteOrigin(await headers());
 
   // card: the order waits for the bank; emails go out when the payment is confirmed (lib/payments.ts)
-  if (payment === "card" || payment === "bogloan") {
+  if (isBogPayment(payment)) {
     try {
       const bog = await createBogOrder({
         number,
@@ -183,14 +186,15 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
         total,
         origin,
         buyer: { name, phone: phone.replace(/^\+?995/, ""), email: email || undefined },
-        loan: payment === "bogloan" ? loan : undefined,
+        loan: withPlan ? loan : undefined,
+        bnpl: payment === "bogbnpl",
       });
       await db.update(orders).set({ bogOrderId: bog.id }).where(eq(orders.id, orderId));
       return { status: "redirect", url: bog.redirect };
     } catch (e) {
       console.error(e);
       await db.update(orders).set({ paymentStatus: "failed" }).where(eq(orders.id, orderId));
-      const what = payment === "bogloan" ? "განვადების გაფორმება" : "ბარათით გადახდა";
+      const what = payment === "bogloan" ? "განვადების გაფორმება" : payment === "bogbnpl" ? "ნაწილ-ნაწილ გადახდა" : "ბარათით გადახდა";
       return {
         status: "error",
         message: `${what} ახლა ვერ მოხერხდა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.`,
@@ -242,6 +246,23 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
     }
   }
 
+  // Credo: the buyer applies on the bank's page. There is no callback, so the emails go out now
+  let credoUrl = "";
+  if (payment === "credo") {
+    try {
+      credoUrl = (await createCredoOrder({ number, items: lines.map((l) => ({ name: l.product.name, qty: l.qty, price: l.product.price })), discount, delivery: ship })).redirect;
+    } catch (e) {
+      console.error(e);
+      await db.update(orders).set({ paymentStatus: "failed" }).where(eq(orders.id, orderId));
+      return {
+        status: "error",
+        message: "განვადების განაცხადი ახლა ვერ შეიქმნა. სცადეთ თავიდან ან აირჩიეთ სხვა მეთოდი.",
+        fields: { payment: "განვადება დროებით მიუწვდომელია" },
+        values,
+      };
+    }
+  }
+
   // emails go out after the response, so the buyer does not wait for the mail server
   const mail = {
     id: orderId,
@@ -262,6 +283,7 @@ export async function placeOrder(_prev: OrderState, form: FormData): Promise<Ord
   };
   after(async () => sendOrderEmails(origin, mail, await getSiteSettings()));
 
+  if (credoUrl) return { status: "redirect", url: credoUrl, clear: true };
   return { status: "ok", orderNumber: number, total };
 }
 

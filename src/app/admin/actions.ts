@@ -7,11 +7,12 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { categories, db, heroSlides, media, orders, products, promoCodes, siteSettings, type OrderStatus } from "@/db";
 import { checkCredentials, createSessionToken, requireAdmin, SESSION_COOKIE } from "@/lib/auth";
-import { normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
+import { isBogPayment, normalizePromo, orderStatuses, PROMO_RE } from "@/lib/data";
+import { credoEnabled } from "@/lib/credo";
 import { TAGS } from "@/lib/queries";
 import { slugify } from "@/lib/slug";
 import { optimizeImage, releaseMedia, sweepOrphans } from "@/lib/media";
-import { siteOrigin, syncBogPayment, syncFlittPayment, syncInstallment } from "@/lib/payments";
+import { siteOrigin, syncBogPayment, syncCredo, syncFlittPayment, syncInstallment } from "@/lib/payments";
 import { cancelInstallment, confirmInstallment } from "@/lib/tbc";
 import { isImageUrl, isVideoUrl, newKey, presignPut, publicUrl, putObject, r2Enabled } from "@/lib/storage";
 
@@ -505,8 +506,10 @@ export async function bankAction(id: number, what: "refresh" | "confirm" | "canc
   if (!o) return { error: "შეკვეთა ვერ მოიძებნა" };
   const origin = siteOrigin(await headers());
   try {
-    if ((o.payment === "card" || o.payment === "bogloan") && o.bogOrderId) {
+    if (isBogPayment(o.payment) && o.bogOrderId) {
       await syncBogPayment(o.bogOrderId, origin);
+    } else if (o.payment === "credo" && credoEnabled) {
+      await syncCredo(id);
     } else if (o.payment === "split" && o.flittOrderId) {
       await syncFlittPayment(o.flittOrderId, origin);
     } else if (o.payment === "installment" && o.tbcSessionId) {
